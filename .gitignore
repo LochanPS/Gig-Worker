@@ -15,3 +15,6 @@ contracts/broadcast/
 backend/prisma/*.db
 # addresses written at runtime by the deploy script
 shared/abis/addresses.local.json
+
+# TS build info
+*.tsbuildinfo
