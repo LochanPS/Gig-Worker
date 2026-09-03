@@ -172,18 +172,50 @@ settlement real. Nothing on the backend side needs to change.
 --------------------------------------------------------------------------------
 9. DOCUMENTS CONSUME THE SETTLEMENT FIELDS (as of backend step 10 — BACKEND DONE)
 --------------------------------------------------------------------------------
-The receipt (/payments/:id/receipt.pdf) and compliance report
-(/payments/:id/compliance.pdf) are print-ready HTML that surface the on-chain
-data the settlement layer writes: escrowId, txHashFund, txHashRelease on the
-receipt, and the decision anchorTxHash on the compliance report. These read
-straight from the Payment / ComplianceDecision rows — so once P1's real
-settlement populates real tx hashes and anchor hashes (instead of the simulated
-ones), the documents show real on-chain references with zero code change.
+The receipt (/payments/:id/receipt.pdf), compliance report
+(/payments/:id/compliance.pdf) and FIRC (/payments/:id/firc.pdf) are print-ready
+HTML that surface the on-chain data the settlement layer writes: escrowId,
+txHashFund, txHashRelease on the receipt and the FIRC, and the decision
+anchorTxHash on the compliance report. These read straight from the Payment /
+ComplianceDecision rows — so once P1's real settlement populates real tx hashes
+and anchor hashes (instead of the simulated ones), the documents show real
+on-chain references with zero code change.
+
+FIRC (Foreign Inward Remittance Certificate) — /payments/:id/firc.pdf
+  The one document with real-world weight: an Indian resident's proof of a
+  legitimate foreign-currency inward remittance, used for tax filing. It is
+  generated (backend/src/modules/documents/document.service.ts :: fircHtml)
+  ONLY when the remittance actually arrived, enforced by two guards:
+    - dstCurrency === 'INR'  -> else 400 (a FIRC certifies money credited in INR)
+    - state === 'COMPLETED'  -> else 409 (cannot certify an unsettled remittance)
+  Both map to HTTP status via the global error handler (err.statusCode) in app.ts.
+  Content is derived entirely from existing rows — no schema change:
+    - Remitter (payer abroad):  Payment.company + CompanyProfile (legalName,
+      country, regNumber)
+    - Beneficiary (payee in IN): Payment.freelancer + FreelancerProfile (fullName,
+      country, panOrTaxId)
+    - Amounts: gross = srcAmountMinor; charges = feeAmountMinor; net converted =
+      srcAmountMinor - feeAmountMinor; INR credited = dstAmountMinor
+    - Rate: FxRate.lockedRate ?? FxRate.midRate (so the FIRC shows the RATE_LOCKED
+      rate the payee was actually settled at, not a later mid)
+    - Purpose: purposeCode + PURPOSE_CODE_LABELS (shared) e.g. "P0802 — Software
+      services"
+    - Settlement: escrowId, txHashFund, txHashRelease (same on-chain fields as the
+      receipt) — real once SETTLEMENT_MODE=real populates them
+  Certificate number is deterministic: FIRC/<issue-year>/<first 8 hex of payment
+  id, upper>. Pure helpers (fircCertNumber, purposeDescription) are DB-free
+  unit-tested (backend document.test.ts). The document carries a visible
+  "Demo · not a bank-issued FIRC" badge — on real main-net this becomes an
+  Authorised-Dealer-issued certificate; the data fields do not change.
+  Testnet/main-net note: like the receipt, the FIRC is chain-agnostic — it renders
+  whatever tx hashes / escrow id the active Settlement impl wrote, so anvil, Amoy
+  and main-net all produce a correct FIRC with no code change.
 
 BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
-compliance, agent, alerts, seed/reset, invoices, documents), 34 unit tests
-green, every flow proven end-to-end against a real Postgres. The settlement seam
-(§3) is the single remaining integration point for P1's real chain.
+compliance, agent, alerts, seed/reset, invoices, documents), plus the FIRC
+document added on the frontend track (receipt + compliance + FIRC), 36 unit
+tests green, every flow proven end-to-end against a real Postgres. The settlement
+seam (§3) is the single remaining integration point for P1's real chain.
 
 --------------------------------------------------------------------------------
 10. P1 STATUS (track/chain)

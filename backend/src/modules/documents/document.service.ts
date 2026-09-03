@@ -2,7 +2,8 @@
 // a compliance report. The browser turns these into PDF via print-to-PDF, so there
 // is no heavy PDF dependency (roadmap: PDFs are lowest priority, keep it demo-safe).
 import { prisma } from '../../lib/db.js';
-import type { RuleResult } from '@gigbridge/shared';
+import type { RuleResult, PurposeCode } from '@gigbridge/shared';
+import { PURPOSE_CODE_LABELS } from '@gigbridge/shared';
 
 const money = (minor: number | null | undefined, ccy: string) =>
   minor == null ? '—' : `${ccy} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,6 +32,10 @@ const shell = (title: string, body: string) => `<!doctype html><html><head><meta
  .verdict{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:700;font-size:12px;letter-spacing:.06em}
  .v-APPROVE{background:#d4efec;color:#0e7c72}.v-FLAG{background:#fbecd2;color:#9a5f08}.v-REJECT{background:#f9dedd;color:#b5322e}
  .agent{background:#f6f8fa;border-left:3px solid #0e9488;padding:11px 14px;border-radius:4px;color:#2b3543;font-size:13px}
+ .stmt{background:#f6f8fa;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin:18px 0;color:#2b3543;line-height:1.6}
+ .seal{margin-top:34px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+ .seal .sig{border-top:1px solid #98a6b8;padding-top:6px;font-size:12px;color:#475264;min-width:210px;text-align:center}
+ .badge{display:inline-block;border:1px dashed #0e9488;color:#0e7c72;border-radius:6px;padding:2px 8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
  .foot{margin-top:30px;border-top:1px solid #d3dae2;padding-top:10px;color:#8695a6;font-size:11px}
 </style></head><body>${body}
 <div class="foot">GigBridge — autonomous cross-border payment gateway. This document is generated from immutable on-chain and ledger records. Amounts in minor units are reconciled to the settlement transaction.</div>
@@ -103,4 +108,112 @@ export async function complianceReportHtml(paymentId: string): Promise<string> {
     ${d?.reviewedBy ? `<tr><td class="k">Reviewed by</td><td class="v mono">${esc(d.reviewedBy)}</td></tr><tr><td class="k">Review note</td><td class="v">${esc(d.reviewNote ?? '')}</td></tr>` : ''}
   </table>`;
   return shell(`Compliance ${p.id.slice(0, 8)}`, body);
+}
+
+// --- FIRC (Foreign Inward Remittance Certificate) -----------------------------
+// The one document with real-world weight: an Indian resident's proof of a
+// legitimate foreign-currency inward remittance, used for tax filing. Issued
+// ONLY for a COMPLETED remittance credited in INR (see guards below).
+
+// FIRC is only meaningful for funds actually credited in India.
+export const FIRC_CURRENCY = 'INR';
+
+// Deterministic, human-readable certificate number derived from the payment id
+// (pure — unit-tested without a DB).
+export function fircCertNumber(paymentId: string, issuedAt: Date): string {
+  const serial = paymentId.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `FIRC/${issuedAt.getUTCFullYear()}/${serial}`;
+}
+
+// "P0802 — Software services" (pure — unit-tested without a DB).
+export function purposeDescription(code: string | null | undefined): string {
+  if (!code) return 'Not specified';
+  const label = PURPOSE_CODE_LABELS[code as PurposeCode];
+  return label ? `${code} — ${label}` : code;
+}
+
+export async function fircHtml(paymentId: string): Promise<string> {
+  const p = await prisma.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    include: {
+      company: { include: { company: true } },
+      freelancer: { include: { freelancer: true } },
+      fxRate: true,
+    },
+  });
+
+  // Guards: a certificate may only attest to money that actually arrived.
+  if (p.dstCurrency !== FIRC_CURRENCY) {
+    throw Object.assign(
+      new Error(`A FIRC is issued only for inward remittances credited in ${FIRC_CURRENCY} (this payment credits ${p.dstCurrency}).`),
+      { statusCode: 400 },
+    );
+  }
+  if (p.state !== 'COMPLETED') {
+    throw Object.assign(
+      new Error(`A FIRC can only be issued for a COMPLETED remittance (current state: ${p.state}).`),
+      { statusCode: 409 },
+    );
+  }
+
+  const issuedAt = new Date();
+  const certNo = fircCertNumber(p.id, issuedAt);
+  const rate = p.fxRate ? (p.fxRate.lockedRate ?? p.fxRate.midRate) : null;
+  const netForeignMinor = p.srcAmountMinor - (p.feeAmountMinor ?? 0);
+  const beneficiary = p.freelancer.freelancer;
+  const remitter = p.company.company;
+
+  const body = `
+  <div class="brand"><h1>Foreign Inward Remittance Certificate</h1><span class="tag">GigBridge · FIRC</span></div>
+  <table>
+    <tr><td class="k">Certificate No.</td><td class="v mono">${esc(certNo)}</td></tr>
+    <tr><td class="k">Date of issue</td><td class="v">${esc(issuedAt.toISOString().slice(0, 10))}</td></tr>
+    <tr><td class="k">Date of remittance</td><td class="v">${esc(p.createdAt.toISOString().slice(0, 10))}</td></tr>
+    <tr><td class="k">Payment reference</td><td class="v mono">${esc(p.id)}</td></tr>
+    ${p.invoiceRef ? `<tr><td class="k">Invoice reference</td><td class="v mono">${esc(p.invoiceRef)}</td></tr>` : ''}
+  </table>
+
+  <div class="stmt">This is to certify that the under-mentioned foreign inward remittance has been
+  received and credited in Indian Rupees to the beneficiary named below, in accordance with
+  the declared purpose. This certificate is generated from immutable on-chain settlement and
+  ledger records.</div>
+
+  <h2>Remitter (payer — abroad)</h2>
+  <table>
+    <tr><td class="k">Name</td><td class="v">${esc(remitter?.legalName ?? p.company.name)}</td></tr>
+    <tr><td class="k">Country</td><td class="v">${esc(remitter?.country ?? p.company.country)}</td></tr>
+    ${remitter?.regNumber ? `<tr><td class="k">Registration no.</td><td class="v mono">${esc(remitter.regNumber)}</td></tr>` : ''}
+  </table>
+
+  <h2>Beneficiary (payee — resident in India)</h2>
+  <table>
+    <tr><td class="k">Name</td><td class="v">${esc(beneficiary?.fullName ?? p.freelancer.name)}</td></tr>
+    <tr><td class="k">Country of residence</td><td class="v">${esc(beneficiary?.country ?? p.freelancer.country)}</td></tr>
+    <tr><td class="k">PAN / Tax ID</td><td class="v mono">${esc(beneficiary?.panOrTaxId ?? '—')}</td></tr>
+  </table>
+
+  <h2>Remittance details</h2>
+  <table>
+    <tr><td class="k">Purpose of remittance</td><td class="v">${esc(purposeDescription(p.purposeCode))}</td></tr>
+    <tr><td class="k">Mode of payment</td><td class="v">Electronic — blockchain-settled (USDC escrow)</td></tr>
+    <tr><td class="k">Gross amount received</td><td class="v">${money(p.srcAmountMinor, p.srcCurrency)}</td></tr>
+    <tr><td class="k">Less: platform / AD charges</td><td class="v">${money(p.feeAmountMinor, p.srcCurrency)}</td></tr>
+    <tr><td class="k">Net converted (foreign)</td><td class="v">${money(netForeignMinor, p.srcCurrency)}</td></tr>
+    <tr><td class="k">Exchange rate applied (${esc(p.srcCurrency)}→${esc(p.dstCurrency)})</td><td class="v">${rate != null ? rate.toFixed(4) : '—'}</td></tr>
+    <tr class="total"><td class="k">Amount credited to beneficiary</td><td class="v">${money(p.dstAmountMinor, p.dstCurrency)}</td></tr>
+  </table>
+
+  <h2>Settlement (on-chain)</h2>
+  <table>
+    <tr><td class="k">Escrow ID</td><td class="v mono">${esc(p.escrowId ?? '—')}</td></tr>
+    <tr><td class="k">Fund transaction</td><td class="v mono">${esc(p.txHashFund ?? '—')}</td></tr>
+    <tr><td class="k">Release transaction</td><td class="v mono">${esc(p.txHashRelease ?? '—')}</td></tr>
+  </table>
+
+  <div class="seal">
+    <div class="sig">Authorised signatory<br><span class="mono" style="color:#8695a6">GigBridge Settlement</span></div>
+    <div class="badge">Demo · not a bank-issued FIRC</div>
+  </div>`;
+
+  return shell(`FIRC ${p.id.slice(0, 8)}`, body);
 }
