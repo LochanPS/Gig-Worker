@@ -1,6 +1,9 @@
 ================================================================================
 GIGBRIDGE — SIMPLE ROADMAP (per path + flow)
-Quick-reference companion to ROADMAP_3_PERSON_3_DAY.txt. Status as of P1 step 7.
+Quick-reference companion to ROADMAP_3_PERSON_3_DAY.txt.
+Hackathon tracks P1/P2/P3 are COMPLETE (proven full-stack on real anvil chain).
+POST-HACKATHON: real chain + hosting + scale live in GO_LIVE_PLAN.md (P4/P5/P6
+appended at the bottom of this file). READ docs/GO_LIVE_PLAN.md FIRST.
 ================================================================================
 
 P1 — CHAIN & SETTLEMENT  (branch track/chain)
@@ -62,3 +65,37 @@ SYNC POINTS — all three converge
   Day2 EOD  : Scenario 1 real on anvil across all dashboards   <- big checkpoint
   Day3 noon : all 4 scenarios from `docker compose up`; freeze
 ================================================================================
+
+================================================================================
+POST-HACKATHON PHASES (see docs/GO_LIVE_PLAN.md for the full how-to)
+================================================================================
+
+P4 — REAL CHAIN + HOSTING  (this week, free)
+  1. Chain-agnostic deploy: per-chain addresses + env override   [done]
+  2. Frontend VITE_API_BASE for split hosting                    [done]
+  3. Deploy 4 contracts to Base Sepolia; commit addresses.84532  [needs your key+RPC]
+  4. Neon Postgres + backend (Railway/Render) + frontend (Vercel)[needs your accounts]
+  5. Public URL runs a REAL testnet payment end-to-end           [after 3+4]
+
+P5 — REAL USERS  (30 days)
+  1. Self-serve signup + email verification
+  2. Non-custodial / MPC wallets (Privy/Turnkey) — kill plaintext keys
+  3. Secrets hardening + API rate limiting
+  4. KYC/AML sandbox behind the Identity seam (Sumsub/Persona/Onfido)
+  5. Smart-contract audit (EscrowVault holds funds — non-negotiable)
+  6. Sentry + status page
+
+P6 — REAL MONEY, PARTNER-FIRST  (60-90 days)
+  1. Circle Mint (USDC<->USD)
+  2. EU EMI partner (EUR) + India PA-CB partner (INR) conversations
+  3. Gas abstraction (paymaster / ERC-4337)
+  4. One pilot corridor live with 0.75% fee via partner rails
+  5. Fintech counsel; limitation-of-liability; enforce-mode opt-in
+
+TARGETS
+  Today  : real Base Sepolia tx w/ explorer link
+  Week   : hosted, public login, someone-not-you runs a payout (shadow)
+  30d    : no plaintext keys, MPC wallets, KYC sandbox, audit booked
+  60d    : off-ramp partner talks + 3-5 design partners on ONE corridor
+  90d    : 0.75% fee live in pilot corridor; counsel engaged
+  Company: ~$100k/mo volume, >=0.5% net take, <2% manual review

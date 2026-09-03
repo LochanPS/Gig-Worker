@@ -1,0 +1,48 @@
+# Render blueprint for the GigBridge backend (Fastify + viem + WebSocket).
+# Postgres lives on Neon (free) — set DATABASE_URL as a secret in the dashboard.
+# Deploy: Render dashboard -> New -> Blueprint -> point at this repo.
+#
+# Secrets to fill in the Render dashboard (never commit these):
+#   DATABASE_URL, JWT_SECRET, RPC_URL, PLATFORM_PRIVATE_KEY, DEPLOYER_PRIVATE_KEY,
+#   TREASURY_ADDRESS, (optional) ANTHROPIC_API_KEY, DEPLOYED_ADDRESSES
+services:
+  - type: web
+    name: gigbridge-backend
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter ./backend prisma:generate
+    startCommand: pnpm --filter ./backend exec prisma migrate deploy && pnpm --filter ./backend exec tsx src/index.ts
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: CHAIN_ID
+        value: "84532" # Base Sepolia
+      - key: SETTLEMENT_MODE
+        value: real
+      - key: FX_API_URL
+        value: https://api.frankfurter.app
+      - key: FEE_BPS
+        value: "75"
+      # --- fill these as secrets in the dashboard ---
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: RPC_URL
+        sync: false
+      - key: PLATFORM_PRIVATE_KEY
+        sync: false
+      - key: DEPLOYER_PRIVATE_KEY
+        sync: false
+      - key: TREASURY_ADDRESS
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: inline deployed-contract addresses for ephemeral filesystems.
+      # If you commit shared/abis/addresses.84532.json you can leave this unset.
+      - key: DEPLOYED_ADDRESSES
+        sync: false

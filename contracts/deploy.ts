@@ -25,7 +25,19 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const abisDir = resolve(here, "..", "shared", "abis");
-const ADDRESSES_FILE = resolve(abisDir, "addresses.local.json");
+
+/**
+ * Where deployed addresses live, keyed by chain:
+ *   - local anvil (31337) -> addresses.local.json  (gitignored, ephemeral)
+ *   - any real chain       -> addresses.<chainId>.json  (committed, so a hosted
+ *     backend on Base Sepolia reuses the same contracts across restarts instead
+ *     of redeploying on every boot).
+ * A hosted host with an ephemeral filesystem (Railway/Render) can instead pass
+ * the whole record inline via the DEPLOYED_ADDRESSES env var (JSON).
+ */
+function addressesFileFor(chainId: number): string {
+  return resolve(abisDir, chainId === DEFAULT_CHAIN_ID ? "addresses.local.json" : `addresses.${chainId}.json`);
+}
 
 /** Anvil account 0 — well-known dev key. DEMO ONLY, never a real key. */
 const DEFAULT_DEPLOYER = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -65,9 +77,19 @@ function localChain(chainId: number, rpcUrl: string) {
   });
 }
 
-export function loadAddresses(): DeployedAddresses | null {
+export function loadAddresses(chainId?: number): DeployedAddresses | null {
+  // 1. Inline override for ephemeral hosts (no writable/committed file needed).
+  const inline = process.env.DEPLOYED_ADDRESSES;
+  if (inline) {
+    try {
+      const parsed = JSON.parse(inline) as DeployedAddresses;
+      if (chainId === undefined || parsed.chainId === chainId) return parsed;
+    } catch { /* fall through to file */ }
+  }
+  // 2. Per-chain committed/local file.
+  const cid = chainId ?? Number(process.env.CHAIN_ID ?? DEFAULT_CHAIN_ID);
   try {
-    return JSON.parse(readFileSync(ADDRESSES_FILE, "utf8")) as DeployedAddresses;
+    return JSON.parse(readFileSync(addressesFileFor(cid), "utf8")) as DeployedAddresses;
   } catch {
     return null;
   }
@@ -114,7 +136,7 @@ export async function deployContracts(opts: DeployOpts = {}): Promise<DeployedAd
     AuditAnchor: auditAnchor,
     deployedAt: new Date().toISOString(),
   };
-  writeFileSync(ADDRESSES_FILE, JSON.stringify(addresses, null, 2) + "\n");
+  writeFileSync(addressesFileFor(chainId), JSON.stringify(addresses, null, 2) + "\n");
   return addresses;
 }
 
@@ -122,7 +144,7 @@ export async function deployContracts(opts: DeployOpts = {}): Promise<DeployedAd
 export async function ensureDeployed(opts: DeployOpts = {}): Promise<DeployedAddresses> {
   const rpcUrl = opts.rpcUrl ?? process.env.RPC_URL ?? DEFAULT_RPC;
   const chainId = opts.chainId ?? Number(process.env.CHAIN_ID ?? DEFAULT_CHAIN_ID);
-  const existing = loadAddresses();
+  const existing = loadAddresses(chainId);
   if (existing && existing.chainId === chainId) {
     const pub = createPublicClient({ chain: localChain(chainId, rpcUrl), transport: http(rpcUrl) });
     const code = await pub.getCode({ address: existing.EscrowVault });

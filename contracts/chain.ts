@@ -64,11 +64,11 @@ export interface ChainOpsOptions {
 }
 
 export function createChainOps(opts: ChainOpsOptions = {}) {
-  const addresses = opts.addresses ?? loadAddresses();
-  if (!addresses) throw new Error("chain: no deployed addresses — run ensureDeployed() first");
-
   const rpcUrl = opts.rpcUrl ?? process.env.RPC_URL ?? DEFAULT_RPC;
   const chainId = opts.chainId ?? Number(process.env.CHAIN_ID ?? DEFAULT_CHAIN_ID);
+  const addresses = opts.addresses ?? loadAddresses(chainId);
+  if (!addresses) throw new Error("chain: no deployed addresses — run ensureDeployed() first");
+
   const chain = defineChain({
     id: chainId,
     name: "gigbridge-local",

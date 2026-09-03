@@ -3,7 +3,11 @@ import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
 } from '@gigbridge/shared';
 
-const BASE = '/api/v1';
+// In dev, Vite proxies /api -> backend:4000 (relative base works).
+// In prod (frontend and backend on different origins), set VITE_API_BASE to the
+// backend origin, e.g. https://gigbridge-api.up.railway.app
+const API_ORIGIN = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+const BASE = `${API_ORIGIN}/api/v1`;
 const TOKEN_KEY = 'gb_token';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
