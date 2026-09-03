@@ -148,12 +148,22 @@ When wiring real settlement, mint MockUSDC to the seeded company wallets at boot
 verified-party gate in EscrowVault.fund() passes for the demo actors.
 
 --------------------------------------------------------------------------------
-8. CURRENT STATUS (as of backend step 8)
+8. CURRENT STATUS (as of backend step 9)
 --------------------------------------------------------------------------------
-Backend side of the seam is DONE and now proven end-to-end against a real Postgres:
+Backend side of the seam is DONE and proven end-to-end against a real Postgres:
 login -> quote -> create payment -> compliance (APPROVE/FLAG/REJECT) -> confirm ->
 fund -> settle -> COMPLETED, with escrowId + fund/release tx hashes persisted and
 the decision hash anchored — all via simulatedSettlement. Admin queue and live
-anomaly alerts verified. P1 implementing §3 + §4 (and §7 boot steps) is the only
-remaining work to make settlement real. Nothing on the backend side needs to change.
+anomaly alerts verified.
+
+Invoice-initiated payments (step 9) go through the SAME settlement seam: a
+freelancer raises an invoice, the company approves it, and approval calls the
+orchestrator's createPayment — so there is NO separate settlement path for
+invoices. When P1's real settlement lands, invoice-approved payments settle on
+chain exactly like company-initiated ones; the invoice is auto-marked PAID when
+its payment reaches COMPLETED. Nothing extra is needed on the chain side for
+invoices.
+
+P1 implementing §3 + §4 (and §7 boot steps) is the only remaining work to make
+settlement real. Nothing on the backend side needs to change.
 ================================================================================
