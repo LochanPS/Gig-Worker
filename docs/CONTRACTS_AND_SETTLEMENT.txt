@@ -240,7 +240,13 @@ on-chain USDC). For a fully faithful demo, P2 may later seed
 walletAddress = privateKeyToAccount(walletKey).address; not required — settlement
 works as-is.
 
-NEXT (P1): optional event listener (watch PaymentFunded/Released for
-fire-and-confirm) and the Day-3 Polygon Amoy public deploy + explorer links.
-Both are nice-to-haves; the core settlement path is complete and proven.
+EVENT LISTENER: DONE. chain.ts watchEscrow() polls EscrowVault events; wired
+into enableRealSettlement() so the backend logs every PaymentFunded/Released/
+Refunded live with tx hash + block (the on-chain source of truth for the live
+tx feed, PRD FR-5.3). Verified: fund/release events logged as anvil mines them.
+
+REMAINING (P1, deferred): Day-3 Polygon Amoy public deploy + explorer links.
+Deliberately deferred — external RPC + a funded key is a venue risk, and local
+anvil is the live-demo path. The core P1 track (contracts + settlement + event
+listener) is COMPLETE and proven full-stack.
 ================================================================================

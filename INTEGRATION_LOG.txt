@@ -121,3 +121,15 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
     without this.
   - Core P1 settlement path COMPLETE + proven. Remaining are nice-to-haves:
     event listener (fire-and-confirm) + Day-3 Polygon Amoy.
+
+[2026-09-03] EVENT LISTENER done (P1 / track/chain)
+  - chain.ts watchEscrow(): polls EscrowVault events; wired into
+    enableRealSettlement() — backend logs every PaymentFunded/Released/Refunded
+    live with tx hash + block (on-chain source of truth for the live feed,
+    PRD FR-5.3). Verified firing during the e2e.
+  - e2e-real-chain.ts hardened: per-escrow-record assertions (history-
+    independent) + auto-approves via /admin/queue/:id/resolve when the anomaly
+    rules FLAG a repeated demo payment — so it also exercises the admin path.
+  - P1 TRACK COMPLETE: contracts + settlement + event listener, proven full-
+    stack. Only deferred item is Day-3 Polygon Amoy (venue-risk; local anvil is
+    the demo path). Backend typecheck clean; 34 backend + 34 forge tests green.

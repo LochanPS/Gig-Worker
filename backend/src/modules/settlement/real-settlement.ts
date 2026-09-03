@@ -122,7 +122,12 @@ export async function enableRealSettlement(log: Logger = noopLog): Promise<boole
   try {
     const ops = await ensureChainReady(log);
     setSettlement(createRealSettlement(ops));
-    log.info("real-settlement: ENABLED (on-chain settlement active)");
+    // Live on-chain feed (PRD FR-5.3): log every settlement event as anvil mines it.
+    ops.watchEscrow((e) => {
+      const id = typeof e.args.id === "string" ? e.args.id : "";
+      log.info(`chain event ${e.eventName} id=${id} tx=${e.txHash} block=${e.blockNumber ?? "?"}`);
+    });
+    log.info("real-settlement: ENABLED (on-chain settlement active + event listener)");
     return true;
   } catch (err) {
     log.warn(`real-settlement: chain unavailable, staying on simulated settlement (${(err as Error).message})`);
