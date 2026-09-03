@@ -1,6 +1,5 @@
 INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared must be noted here in the same commit.
-=====================================================================
-
+==============================================================
 [2026-09-03] SCAFFOLD MERGED (P2 / track/backend)
   - pnpm monorepo: shared / backend / frontend / contracts / infra / docs.
   - /shared package published as @gigbridge/shared with ALL enums, constants
@@ -29,3 +28,21 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
     now goes DRAFT->COMPLIANCE_CHECK then branches. Found via real e2e run.
   - PROVEN end-to-end on real Postgres: login/quote/create/compliance/confirm/
     settle/COMPLETED, admin queue, live alerts. Updated CONTRACTS_AND_SETTLEMENT §7-8.
+[2026-09-03] ABIS COMMITTED (P1 / track/chain)
+  - Foundry contracts done + fully forge-tested (34 tests): MockUSDC,
+    IdentityRegistry, EscrowVault, AuditAnchor. Signatures per BUILD_CONTRACTS
+    section 6 (frozen).
+  - ABIs exported to shared/abis/{MockUSDC,IdentityRegistry,EscrowVault,
+    AuditAnchor}.{json,ts} + index.ts. The .ts files export each ABI `as const`
+    for viem typed calls. Regenerate via `node contracts/script/export-abis.mjs`.
+  - Deps vendored into contracts/lib (OZ v5.1.0 + forge-std) so builds are
+    offline-safe (NFR-4). solc 0.8.24.
+  - NOTE for P2 (settlement seam): on-chain EscrowVault.fund takes
+    `bytes32 id`. Your settlement.interface.ts fund() receives paymentId (uuid
+    string); the real wrapper will compute id = keccak256(toUtf8(paymentId))
+    and RETURN it as escrowId. Backend already stores escrowId — keep passing
+    the uuid; the wrapper owns the bytes32 derivation. Confirmed compatible
+    with orchestrator confirmPayment().
+  - STILL TODO (P1): contracts/deploy.ts (viem deploy-on-boot ->
+    shared/abis/addresses.local.json), real settlement service in
+    backend/src/settlement, event listener. Lands Day 2.
