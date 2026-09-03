@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+out/
+.env
+.env.local
+*.log
+coverage/
+.DS_Store
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+# Prisma
+backend/prisma/*.db
+# addresses written at runtime by the deploy script
+shared/abis/addresses.local.json

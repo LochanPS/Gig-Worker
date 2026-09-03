@@ -1,0 +1,25 @@
+{
+  "name": "@gigbridge/backend",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "mock": "tsx watch mock/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "demo:reset": "tsx src/scripts/reset.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.0",
+    "@fastify/jwt": "^8.0.0",
+    "@fastify/websocket": "^10.0.0",
+    "@gigbridge/shared": "workspace:*",
+    "fastify": "^4.26.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}

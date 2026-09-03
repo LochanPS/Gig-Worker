@@ -1,2 +1,14 @@
 INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared must be noted here in the same commit.
 =====================================================================
+
+[2026-09-03] SCAFFOLD MERGED (P2 / track/backend)
+  - pnpm monorepo: shared / backend / frontend / contracts / infra / docs.
+  - /shared package published as @gigbridge/shared with ALL enums, constants
+    (frozen thresholds), entity types, zod request schemas, and WS event
+    contract from BUILD_CONTRACTS sections 3-5 & 8.
+  - Mock API server at backend/mock (serves every endpoint in section 4 with
+    seed-shaped fixtures) so P3 can build against http://localhost:4000 now.
+  - docker-compose skeleton (postgres + anvil), .env.example per section 2.
+  - Docs moved into /docs. No BUILD_CONTRACTS values changed.
+  P1: rebase onto main, put Foundry work in /contracts, commit ABIs to
+      /shared/abis. P3: rebase onto main, put Vite app in /frontend.
