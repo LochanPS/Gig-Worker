@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/auth.routes.js';
 import { paymentRoutes } from './modules/payments/payment.routes.js';
 import { registerComplianceEngine } from './modules/compliance/engine.js';
 import { complianceRoutes } from './modules/compliance/compliance.routes.js';
+import { invoiceRoutes } from './modules/invoices/invoice.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
@@ -35,7 +36,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(authRoutes);
       await api.register(paymentRoutes);
       await api.register(complianceRoutes);
-      // TODO(P2): invoices, credentials, agent (step 6), anomaly alerts (step 7)
+      await api.register(invoiceRoutes);
+      // TODO(P2): PDF receipts/reports (step 10)
     },
     { prefix: '/api/v1' },
   );

@@ -9,6 +9,7 @@ import { assertTransition, TIMELINE_STEPS } from './state.js';
 import { createQuote, getQuote, isQuoteValid } from '../fx/fx.service.js';
 import { getComplianceEngine } from '../compliance/compliance.interface.js';
 import { raiseAlertsFromRules } from '../alerts/alert.service.js';
+import { markInvoicePaidByPayment } from '../invoices/invoice.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import type { PaymentState } from '@gigbridge/shared';
 import type { CreatePaymentInput } from '@gigbridge/shared';
@@ -171,6 +172,7 @@ export async function confirmPayment(paymentId: string, actorId: string, quoteId
   await transition(paymentId, 'COMPLETED', { actor: 'platform', timelineKey: 'RELEASED', txHash: released.txHash });
   // 'CREDITED' is the off-ramp confirmation on the same COMPLETED state.
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
+  await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
 
   return getPayment(paymentId, actorId);
 }
@@ -183,6 +185,7 @@ export async function releasePayment(paymentId: string, actorId: string) {
   if (p.state === 'FUNDED') await transition(paymentId, 'SETTLING', { actor: actorId, timelineKey: 'SETTLING' });
   const released = await getSettlement().release(p.escrowId ?? '0x');
   await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
+  await markInvoicePaidByPayment(paymentId);
   return getPayment(paymentId, actorId);
 }
 

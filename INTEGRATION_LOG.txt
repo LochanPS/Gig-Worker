@@ -46,3 +46,11 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - STILL TODO (P1): contracts/deploy.ts (viem deploy-on-boot ->
     shared/abis/addresses.local.json), real settlement service in
     backend/src/settlement, event listener. Lands Day 2.
+
+[2026-09-03] Backend step 9: invoices (P2 / track/backend)
+  - Freelancer raises invoice -> company inbox -> approve creates a payment via the
+    SAME orchestrator (compliance/quote/settle). invoiceRef links them; invoice
+    auto-marked PAID on payment COMPLETED. Notifications on received/approved.
+  - /invoices (POST freelancer, GET both), /invoices/:id/approve (company).
+  - Added CreateInvoiceInput export to shared. No contract/settlement changes;
+    updated CONTRACTS_AND_SETTLEMENT §8. Proven end-to-end on real Postgres.

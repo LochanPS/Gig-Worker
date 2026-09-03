@@ -54,6 +54,7 @@ export const createInvoiceSchema = z.object({
   currency: z.enum(CURRENCIES),
   memo: z.string().min(1),
 });
+export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 
 export const resolveQueueSchema = z.object({
   action: z.enum(['APPROVE', 'REJECT']),
