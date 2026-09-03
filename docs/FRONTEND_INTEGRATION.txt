@@ -1,0 +1,78 @@
+================================================================================
+FRONTEND INTEGRATION GUIDE
+Owner: P3 (track/frontend). Consumes: P2 backend REST + WebSocket API.
+NOTE: This is the relevant doc for the frontend path. The frontend does NOT touch
+the contracts/settlement seam — that is documented in CONTRACTS_AND_SETTLEMENT.txt
+(owned by P1) and is unchanged by any frontend work.
+================================================================================
+
+--------------------------------------------------------------------------------
+1. WHAT'S SCAFFOLDED (runnable now, against the REAL backend)
+--------------------------------------------------------------------------------
+Stack: React 18 + Vite + TypeScript + react-router-dom. Design tokens in plain CSS
+(src/styles.css) matching UI_SPEC §1 (dark navy fintech). P3 may layer Tailwind/
+shadcn on top later without changing the token names.
+
+Structure (frontend/):
+  vite.config.ts    dev proxy: /api -> http://localhost:4000 (REST + ws:true)
+  src/lib/api.ts    typed client for every endpoint (imports @gigbridge/shared types)
+  src/lib/auth.tsx  AuthProvider: login / me / token in localStorage
+  src/lib/ws.ts     useWs() hook -> ws://.../api/v1/ws?token=<jwt>
+  src/components/    Layout (role nav), bits (money/Chip/Stat)
+  src/pages/
+    Login.tsx               demo-account picker, real login
+    company/Overview.tsx    stats + payouts table, live via WS
+    company/NewPayout.tsx   THE WIZARD: quote -> compliance verdict + agent
+                            reasoning -> confirm & settle (all real API)
+    freelancer/Home.tsx     balance + received payments, live via WS
+    admin/Monitor.tsx       compliance queue (approve/reject) + fraud alerts, live
+
+VERIFIED: `pnpm --filter ./frontend build` passes; running the backend on :4000 and
+`vite` on :5173, login through the proxy returns the real seeded user.
+
+--------------------------------------------------------------------------------
+2. HOW TO RUN THE WHOLE THING LOCALLY
+--------------------------------------------------------------------------------
+  1. Postgres up; backend: `cd backend && pnpm prisma migrate dev && pnpm db:seed && pnpm dev`
+     (serves :4000). Or `pnpm demo:reset` to restore demo state.
+  2. Frontend: `cd frontend && pnpm dev` (serves :5173, proxies /api to :4000).
+  3. Open http://localhost:5173 — log in with any demo account (password demo1234):
+     novatek@demo.gg (company), priya@demo.gg (freelancer), admin@demo.gg (admin).
+
+--------------------------------------------------------------------------------
+3. THE API CONTRACT THE FRONTEND RELIES ON (frozen — BUILD_CONTRACTS §4/§5)
+--------------------------------------------------------------------------------
+REST base /api/v1. Auth: Bearer <jwt> from /auth/login. Amounts are minor units.
+Key calls the scaffold already wires:
+  POST /auth/login -> {token, user}
+  GET  /fx/quote?pair=EURINR&amount=<minor> -> FxQuote (rate, fee, payeeReceives, vs-PayPal)
+  POST /payments {payeeId, srcCurrency, dstCurrency, srcAmountMinor, purposeCode}
+       -> {payment, quote, decision:{verdict, agentExplanation}}
+  POST /payments/:id/confirm {quoteId} -> Payment (COMPLETED, tx hashes)
+  GET  /payments -> Payment[] (role-scoped)
+  GET  /admin/queue, POST /admin/queue/:id/resolve {action, note}
+  GET  /admin/alerts, /admin/metrics, /admin/rules
+  GET  /payments/:id/receipt.pdf, /payments/:id/compliance.pdf (HTML, print-to-PDF)
+WebSocket /api/v1/ws?token=<jwt> emits: payment.state, alert.new, notification.new,
+metrics.tick. The three dashboards re-fetch on the relevant event -> live timelines.
+
+--------------------------------------------------------------------------------
+4. WHAT P3 STILL OWNS (build out from this foundation)
+--------------------------------------------------------------------------------
+- Per-payment detail page with the 7-step live timeline (UI_SPEC §3.3) + document
+  download buttons (receipt.pdf / compliance.pdf).
+- Freelancer: invoice create/list; identity/credential card; earnings chart (Recharts).
+- Company: freelancer roster, batch payout, invoices inbox, FX history chart.
+- Admin: rules registry page, treasury/metrics charts, alert pattern evidence.
+- Polish per UI_SPEC: typewriter effect on the agent panel, rate-lock countdown ring,
+  confetti + "you kept 99.X%" banner, notification toasts, empty/loading states.
+- Optional: adopt Tailwind + shadcn; tokens already exist to map onto.
+
+--------------------------------------------------------------------------------
+5. STATUS
+--------------------------------------------------------------------------------
+Foundation is live and proven end-to-end against the real backend: auth, role routing,
+the payout wizard (quote -> compliance -> settle), and live WS updates all work. The
+demo's core path (Scenario 1 happy path + Scenario 2 sanctions reject via the
+SanctionedCo payee option) is clickable today. Remaining work is breadth + polish (§4).
+================================================================================
