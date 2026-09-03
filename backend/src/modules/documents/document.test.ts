@@ -1,6 +1,6 @@
 // Tests the money/escape helpers used by the document generator (pure, no DB).
 import { describe, it, expect } from 'vitest';
-import { fircCertNumber, purposeDescription, paymentDocuments } from './document.service.js';
+import { fircCertNumber, purposeDescription, paymentDocuments, assertFircEligible } from './document.service.js';
 
 // Re-declare the same helpers to test their behaviour (kept in sync with service).
 const money = (minor: number | null | undefined, ccy: string) =>
@@ -72,5 +72,27 @@ describe('paymentDocuments', () => {
     const d = byKind(paymentDocuments({ id: 'p4', state: 'DRAFT', dstCurrency: 'INR', hasDecision: false }));
     expect(d.compliance.available).toBe(false);
     expect(d.compliance.reason).toBe('Compliance has not run yet');
+  });
+});
+
+describe('assertFircEligible', () => {
+  it('passes for a COMPLETED INR remittance', () => {
+    expect(() => assertFircEligible('COMPLETED', 'INR')).not.toThrow();
+  });
+  it('rejects a non-INR corridor with statusCode 400', () => {
+    expect(() => assertFircEligible('COMPLETED', 'USD')).toThrowError(/credited in INR/);
+    try {
+      assertFircEligible('COMPLETED', 'USD');
+    } catch (e) {
+      expect((e as { statusCode?: number }).statusCode).toBe(400);
+    }
+  });
+  it('rejects an unsettled remittance with statusCode 409', () => {
+    expect(() => assertFircEligible('FUNDED', 'INR')).toThrowError(/COMPLETED remittance/);
+    try {
+      assertFircEligible('FUNDED', 'INR');
+    } catch (e) {
+      expect((e as { statusCode?: number }).statusCode).toBe(409);
+    }
   });
 });

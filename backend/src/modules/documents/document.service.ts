@@ -173,6 +173,23 @@ export function purposeDescription(code: string | null | undefined): string {
   return label ? `${code} — ${label}` : code;
 }
 
+// A certificate may only attest to money that actually arrived. Pure — throws with
+// the HTTP statusCode the global error handler maps; unit-tested without a DB.
+export function assertFircEligible(state: PaymentState, dstCurrency: string): void {
+  if (dstCurrency !== FIRC_CURRENCY) {
+    throw Object.assign(
+      new Error(`A FIRC is issued only for inward remittances credited in ${FIRC_CURRENCY} (this payment credits ${dstCurrency}).`),
+      { statusCode: 400 },
+    );
+  }
+  if (state !== 'COMPLETED') {
+    throw Object.assign(
+      new Error(`A FIRC can only be issued for a COMPLETED remittance (current state: ${state}).`),
+      { statusCode: 409 },
+    );
+  }
+}
+
 export async function fircHtml(paymentId: string): Promise<string> {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id: paymentId },
@@ -183,19 +200,7 @@ export async function fircHtml(paymentId: string): Promise<string> {
     },
   });
 
-  // Guards: a certificate may only attest to money that actually arrived.
-  if (p.dstCurrency !== FIRC_CURRENCY) {
-    throw Object.assign(
-      new Error(`A FIRC is issued only for inward remittances credited in ${FIRC_CURRENCY} (this payment credits ${p.dstCurrency}).`),
-      { statusCode: 400 },
-    );
-  }
-  if (p.state !== 'COMPLETED') {
-    throw Object.assign(
-      new Error(`A FIRC can only be issued for a COMPLETED remittance (current state: ${p.state}).`),
-      { statusCode: 409 },
-    );
-  }
+  assertFircEligible(p.state, p.dstCurrency);
 
   const issuedAt = new Date();
   const certNo = fircCertNumber(p.id, issuedAt);

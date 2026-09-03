@@ -244,7 +244,7 @@ BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
 compliance, agent, alerts, seed/reset, invoices, documents), plus documents added
 on the frontend track — receipt + compliance + FIRC + credential certificate, a
 GET /credentials/me for the identity card, and a GET /payments/:id/documents
-descriptor — 44 unit tests green, every flow proven end-to-end against a real
+descriptor — 47 unit tests green, every flow proven end-to-end against a real
 Postgres. The settlement seam (§3) is the single remaining integration point for
 P1's real chain.
 
