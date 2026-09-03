@@ -12,3 +12,41 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - Docs moved into /docs. No BUILD_CONTRACTS values changed.
   P1: rebase onto main, put Foundry work in /contracts, commit ABIs to
       /shared/abis. P3: rebase onto main, put Vite app in /frontend.
+
+[2026-09-03] FRONTEND BUILD (P3 / track/frontend)
+  WS PATH: lib/ws.ts pins WS_PATH = '/ws' (mock root). Flip to '/api/v1/ws'
+    when the real backend lands (route registered inside the prefix).
+  MOCK GAPS blocking the cross-window demo and some screens. Requested from P2:
+    1. GET /ws currently emits ONLY metrics.tick. For the live ripple, the real
+       backend must broadcast payment.state, alert.new and notification.new to
+       every connected client on each transition. Frontend consumes all four.
+       Interim: RealtimeProvider polls GET /payments (~1.5s) and synthesises
+       payment.state locally so the demo works against the mock. Remove the poll
+       once the socket broadcasts.
+    2. No roster endpoint. Need GET /company/freelancers (payees) and
+       GET /freelancers/:id. Interim: lib/directory.ts seeds the six demo
+       accounts (same fixture IDs) so payee lists and rosters render.
+    3. No per-payment compliance read. Need GET /payments/:id/compliance
+       returning the full ComplianceDecision (ruleResults + agentExplanation).
+       Interim: wizard reads rule shapes from GET /admin/rules and composes the
+       agent explanation client-side from real threshold constants.
+    4. GET /invoices (list) and GET /notifications are absent. Interim: invoices
+       list is seeded locally; notifications arrive via the socket/poll only.
+    5. POST /payments jumps DRAFT->COMPLIANCE_CHECK and confirm jumps to
+       COMPLETED. For a staged timeline ripple the backend should emit the
+       intermediate RATE_LOCKED/FUNDED/SETTLING/RELEASED states.
+  CHART NOTE: the installed @bklit/heatmap is a calendar (week x weekday) chart,
+    used on /admin/rules as a payment-volume coverage heatmap. A corridor-by-hour
+    matrix variant would need a different component.
+  TOASTS: Sonner was not present in the workspace; a small token-styled toaster
+    (components/ui/toast.tsx) covers transient incoming-payment notices.
+
+[2026-09-04] MOCK WS CRASH (P3 -> P2, action needed in backend/mock/server.ts)
+  backend/mock/server.ts uses `conn.socket.send(...)` / `conn.socket.on(...)`.
+  @fastify/websocket v10 (installed) passes the WebSocket itself as the first
+  handler argument, so `conn.socket` is undefined. On the first metrics tick the
+  handler throws inside setInterval, which is an UNCAUGHT exception and kills the
+  whole mock process, taking every REST endpoint down with it.
+  Fix: use `conn.send(...)` and `conn.on('close', ...)` (the arg IS the socket),
+  or destructure `(socket) =>`. P3 runs a locally patched bundle for the demo;
+  the repo source still needs this one-line fix.
