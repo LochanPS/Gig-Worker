@@ -211,11 +211,31 @@ FIRC (Foreign Inward Remittance Certificate) — /payments/:id/firc.pdf
   whatever tx hashes / escrow id the active Settlement impl wrote, so anvil, Amoy
   and main-net all produce a correct FIRC with no code change.
 
+Credential certificate — /credentials/:id/credential.pdf (+ /credentials/me)
+  The identity counterpart to the payment documents, backed by the Credential row
+  the seed/identity flow writes and the IdentityRegistry the settlement layer reads.
+  Two endpoints (backend/src/modules/credentials/):
+    - GET /credentials/me         PII-safe active credential for the signed-in user
+                                  (the future /me/identity card reads this); 404
+                                  when the user has none (unverified). Never returns
+                                  credentialJs (the encrypted off-chain credential).
+    - GET /credentials/:id/credential.pdf   print-ready certificate: DID, credential
+                                  hash (keccak256, mirrored on-chain), ACTIVE/EXPIRED/
+                                  REVOKED status, validity dates, and the
+                                  IdentityRegistry anchor tx. OWNER-OR-ADMIN only
+                                  (403 otherwise) — tighter than the payment docs
+                                  because it is identity-sensitive.
+  Only the hash is on-chain (GDPR); the same registry hash gates EscrowVault.fund()'s
+  verified-party check (§5/§10), so the credential the certificate attests is exactly
+  the one settlement enforces. Pure helpers (credentialStatus, publicCredential) are
+  DB-free unit-tested.
+
 BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
-compliance, agent, alerts, seed/reset, invoices, documents), plus the FIRC
-document added on the frontend track (receipt + compliance + FIRC), 36 unit
-tests green, every flow proven end-to-end against a real Postgres. The settlement
-seam (§3) is the single remaining integration point for P1's real chain.
+compliance, agent, alerts, seed/reset, invoices, documents), plus documents added
+on the frontend track — receipt + compliance + FIRC + credential certificate, with
+GET /credentials/me for the identity card — 40 unit tests green, every flow proven
+end-to-end against a real Postgres. The settlement seam (§3) is the single
+remaining integration point for P1's real chain.
 
 --------------------------------------------------------------------------------
 10. P1 STATUS (track/chain)

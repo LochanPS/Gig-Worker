@@ -8,10 +8,10 @@ import { PURPOSE_CODE_LABELS } from '@gigbridge/shared';
 const money = (minor: number | null | undefined, ccy: string) =>
   minor == null ? '—' : `${ccy} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const esc = (s: unknown) =>
+export const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-const shell = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8">
+export const shell = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8">
 <title>${esc(title)}</title>
 <style>
  @page{margin:22mm}
