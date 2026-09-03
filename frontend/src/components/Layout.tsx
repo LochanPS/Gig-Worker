@@ -11,8 +11,12 @@ export default function Layout({ children }: { children: ReactNode }) {
         {user?.role === 'COMPANY' && <>
           <NavLink to="/company" end>Overview</NavLink>
           <NavLink to="/company/pay">New payout</NavLink>
+          <NavLink to="/company/invoices">Invoices</NavLink>
         </>}
-        {user?.role === 'FREELANCER' && <NavLink to="/me" end>My earnings</NavLink>}
+        {user?.role === 'FREELANCER' && <>
+          <NavLink to="/me" end>My earnings</NavLink>
+          <NavLink to="/me/invoices">Invoices</NavLink>
+        </>}
         {user?.role === 'ADMIN' && <NavLink to="/admin" end>Monitor</NavLink>}
         <div className="spacer" />
         <div className="who">{user?.name}<br /><span className="mono">{user?.role}</span></div>
