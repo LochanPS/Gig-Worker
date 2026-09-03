@@ -166,4 +166,20 @@ invoices.
 
 P1 implementing §3 + §4 (and §7 boot steps) is the only remaining work to make
 settlement real. Nothing on the backend side needs to change.
+
+--------------------------------------------------------------------------------
+9. DOCUMENTS CONSUME THE SETTLEMENT FIELDS (as of backend step 10 — BACKEND DONE)
+--------------------------------------------------------------------------------
+The receipt (/payments/:id/receipt.pdf) and compliance report
+(/payments/:id/compliance.pdf) are print-ready HTML that surface the on-chain
+data the settlement layer writes: escrowId, txHashFund, txHashRelease on the
+receipt, and the decision anchorTxHash on the compliance report. These read
+straight from the Payment / ComplianceDecision rows — so once P1's real
+settlement populates real tx hashes and anchor hashes (instead of the simulated
+ones), the documents show real on-chain references with zero code change.
+
+BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
+compliance, agent, alerts, seed/reset, invoices, documents), 34 unit tests
+green, every flow proven end-to-end against a real Postgres. The settlement seam
+(§3) is the single remaining integration point for P1's real chain.
 ================================================================================

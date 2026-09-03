@@ -54,3 +54,11 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - /invoices (POST freelancer, GET both), /invoices/:id/approve (company).
   - Added CreateInvoiceInput export to shared. No contract/settlement changes;
     updated CONTRACTS_AND_SETTLEMENT §8. Proven end-to-end on real Postgres.
+
+[2026-09-03] Backend step 10: documents — BACKEND COMPLETE (P2 / track/backend)
+  - receipt.pdf + compliance.pdf as print-ready HTML (browser print-to-PDF,
+    no heavy PDF dep). Receipt: parties/amounts/FX/fee/net + on-chain tx hashes.
+    Report: verdict, all rule results w/ legal refs, agent reasoning, anchor hash.
+  - HTML-escaped (injection-safe), auth-gated (401 without token). Proven live.
+  - All 10 backend steps done; 34 tests green. Settlement seam (§3) is the only
+    remaining P1 integration point. Updated CONTRACTS_AND_SETTLEMENT §9.
