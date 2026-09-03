@@ -34,13 +34,29 @@ Signatures are FROZEN in docs/BUILD_CONTRACTS.txt §6. Summary:
                       revoke(address), isVerified(address) view.
                       Stores ONLY the credential hash — never PII (GDPR).
   EscrowVault.sol     THE CORE. Holds funds between fund() and release().
+                      constructor(IERC20 token, IIdentityRegistry registry,
+                                  address treasury, address admin) — all
+                                  non-zero; admin gets DEFAULT_ADMIN_ROLE +
+                                  PLATFORM_ROLE.
                       fund(bytes32 id, address payee, uint256 amount,
-                           uint256 fee, bytes32 complianceHash)
-                      release(bytes32 id)   — payer or PLATFORM_ROLE
-                      refund(bytes32 id)     — payer pre-release, or PLATFORM
-                      freeze/unfreeze(bytes32 id) — PLATFORM_ROLE
+                           uint256 fee, bytes32 complianceHash) — caller (payer)
+                           must be verified; payee must be verified; fee<=amount;
+                           id must be unused. Pulls `amount` via transferFrom.
+                      release(bytes32 id)   — payer or PLATFORM_ROLE. Payee gets
+                           amount-fee; treasury gets fee.
+                      refund(bytes32 id)     — payer pre-release, or PLATFORM.
+                           Payer gets the FULL amount back (no fee taken).
+                           Refundable from Funded OR Frozen.
+                      freeze/unfreeze(bytes32 id) — PLATFORM_ROLE (dispute hold).
+                      setTreasury(address)  — DEFAULT_ADMIN_ROLE; fee-collection
+                           address, updatable post-deploy.
+                      getPayment(bytes32 id) view -> Payment struct
+                           {id,payer,payee,amount,fee,complianceHash,state,
+                            createdAt,releasedAt}.
+                      states: None -> Funded -> Released | Refunded; Funded <->
+                              Frozen; Frozen -> Refunded.
                       events: PaymentFunded, PaymentReleased, PaymentRefunded,
-                              PaymentFrozen
+                              PaymentFrozen, PaymentUnfrozen, TreasuryUpdated.
                       Guards: OZ AccessControl (PLATFORM_ROLE) + ReentrancyGuard,
                       checks-effects-interactions, verified-party gate via
                       IdentityRegistry.isVerified.
@@ -108,6 +124,13 @@ Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
   back to release()/refund(). Use bytes32.
 - complianceHash: backend computes keccak256 over the decision; passed into fund()
   and also anchored via anchorDecision(). Store on-chain in the Payment struct.
+- Fee routing: fund() escrows the FULL `amount`. On release() the payee receives
+  amount-fee and the `treasury` receives fee; on refund() the payer receives the
+  full amount and NO fee is taken. So the platform earns the fee only on a
+  successful settlement. The treasury address is set at deploy (TREASURY_ADDRESS,
+  defaults to the deployer) and can be changed later via setTreasury(). Worked
+  example from the e2e run: EUR 500 with a EUR 3.75 fee -> payee 496.25 USDC,
+  treasury 3.75 USDC.
 - Wallets: demo wallets are custodial (generated server-side at signup, key in DB,
   DEMO ONLY). The real settlement signs with PLATFORM_PRIVATE_KEY for platform-role
   actions; for payer-funded escrow in the demo, the platform may act on the payer's
@@ -243,4 +266,41 @@ works as-is.
 NEXT (P1): optional event listener (watch PaymentFunded/Released for
 fire-and-confirm) and the Day-3 Polygon Amoy public deploy + explorer links.
 Both are nice-to-haves; the core settlement path is complete and proven.
+
+--------------------------------------------------------------------------------
+11. POST-MERGE STATUS (main — all tracks integrated)
+--------------------------------------------------------------------------------
+The settlement seam is no longer a pending handoff between separate tracks: it is
+integrated on `main`. track/backend (backend + documents), track/chain (real
+settlement) and track/frontend are merged; the tip of main integrates the
+full-stack real-chain e2e (P1 step 10). Everything above describing "P1 hands off
+to P2" is now HISTORY — both sides live in one tree and the seam is wired.
+
+What that means in practice:
+- backend/src/index.ts calls enableRealSettlement(app.log) at boot. Default
+  (SETTLEMENT_MODE unset/simulated) = simulatedSettlement, so `pnpm dev` needs no
+  chain. Set SETTLEMENT_MODE=real (with anvil up) to run on-chain settlement; any
+  chain error at boot falls back to simulated and never crashes (risk R1).
+- The four contracts (contracts/src/*.sol) + 34 forge tests are on main. ABIs and
+  bytecode are committed to shared/abis/*.{json,ts}; the backend deploys via
+  contracts/deploy.ts (viem) with NO Foundry needed at runtime.
+- real-settlement.ts derives every on-chain address from User.walletKey (the
+  actual signer); User.walletAddress stays display-only (see WALLET NOTE, §10).
+
+RUN THE REAL-CHAIN DEMO (from the merged tree):
+  1. anvil                                   # local chain on :8545
+  2. seed Postgres (backend/src/scripts/seed.ts)
+  3. SETTLEMENT_MODE=real pnpm --filter @gigbridge/backend dev
+  Or the self-contained harness (embedded Postgres + anvil assumed running):
+  pnpm --filter @gigbridge/contracts exec tsx script/e2e-real-chain.ts
+
+CONFIG (env — see .env.example for the chain block):
+  RPC_URL, CHAIN_ID            anvil endpoint / id (default :8545, 31337)
+  PLATFORM_PRIVATE_KEY         signer for PLATFORM_ROLE actions (release/refund,
+                               anchor, mint, setCredential). anvil acct 0 in dev.
+  DEPLOYER_PRIVATE_KEY         deploys the four contracts on boot when absent.
+  SETTLEMENT_MODE=real         opt in to on-chain settlement (else simulated).
+  TREASURY_ADDRESS             fee-collection address (defaults to deployer).
+  (SETTLEMENT_MODE and TREASURY_ADDRESS are read by code but not yet listed in
+   .env.example — add them there when you wire a non-default treasury.)
 ================================================================================
