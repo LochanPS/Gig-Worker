@@ -119,9 +119,11 @@ Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
 [x] forge test — all green (34 tests: transitions, access control, reentrancy,
     refund-after-release reverts, fund-with-unverified-party reverts).
 [x] deploy.ts brings up all four contracts on a fresh anvil and writes addresses.
-[~] real-settlement lifecycle: chain path proven via script/itest-settlement.ts
-    (fund -> release, payee USDC += amount-fee). Full-stack run through the
-    orchestrator with SETTLEMENT_MODE=real + Postgres remains for Day-2 pairing.
+[x] real-settlement lifecycle: PROVEN full-stack (script/e2e-real-chain.ts) —
+    login -> create -> confirm through the real API with SETTLEMENT_MODE=real +
+    Postgres -> COMPLETED with real fund/release tx hashes -> on-chain escrow
+    Released, payee MockUSDC = amount-fee (EUR 500 -> 496.25 USDC). Also unit-
+    level via script/itest-settlement.ts.
 [x] With the chain stopped, backend still boots — enableRealSettlement() catches
     any chain error and stays on simulatedSettlement (risk R1). Never a hard crash.
 [x] No PII on-chain: only hashes in IdentityRegistry/AuditAnchor/EscrowVault.
@@ -224,8 +226,21 @@ ACTIVATION (the swap is env-gated so default behaviour is unchanged):
     backend. Everything else (orchestrator, routes, docs) is unchanged.
   - Backend deps gained: viem + @gigbridge/contracts (workspace).
 
-NEXT (P1, Day 2 pairing): full-stack e2e with SETTLEMENT_MODE=real against real
-Postgres (login -> create payment -> confirm -> real fund/release tx -> payee
-on-chain balance up), then the optional event listener (watch PaymentFunded/
-Released for fire-and-confirm) and Day-3 Polygon Amoy deploy.
+FULL-STACK E2E: DONE. `docker`-free harness (embedded-postgres) proved a real
+payment end-to-end on anvil: EUR 500 -> escrow.fund -> release -> payee
+496.25 USDC, real tx hashes on the Payment row. Run it with anvil + a seeded
+Postgres + backend(SETTLEMENT_MODE=real) via:
+  pnpm --filter @gigbridge/contracts exec tsx script/e2e-real-chain.ts
+
+WALLET NOTE (important for P2): the seed sets User.walletKey to random bytes
+UNRELATED to User.walletAddress. real-settlement therefore derives every
+on-chain address from walletKey (the actual signer) — walletAddress is treated
+as display-only. This is transparent to the UI (which shows DB balances, not
+on-chain USDC). For a fully faithful demo, P2 may later seed
+walletAddress = privateKeyToAccount(walletKey).address; not required — settlement
+works as-is.
+
+NEXT (P1): optional event listener (watch PaymentFunded/Released for
+fire-and-confirm) and the Day-3 Polygon Amoy public deploy + explorer links.
+Both are nice-to-haves; the core settlement path is complete and proven.
 ================================================================================
