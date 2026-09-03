@@ -20,5 +20,20 @@ Documents in this repository (read in this order):
   5. DEMO_SCRIPT.txt            — Minute-by-minute pitch/demo choreography
                                   and prepared judge Q&A.
 
-Planned repo layout once the build starts:
-  /contracts  /backend  /frontend  /shared  /infra  /docs
+Repo layout:
+  /shared     TypeScript types, enums, constants, zod schemas, ABIs — the
+              frozen interface treaty every track imports (@gigbridge/shared).
+  /backend    Fastify API + agent + rule engine (P2). /backend/mock is a
+              stand-in API server so the frontend can build immediately.
+  /frontend   React SPA, three dashboards (P3).
+  /contracts  Foundry project: escrow, registry, mock USDC, audit anchor (P1).
+  /infra      docker-compose stack.
+  /docs       PRD, TRD, UI spec, roadmap, demo script, build contract, prompts.
+
+Quick start (scaffold stage):
+  pnpm install
+  pnpm --filter ./backend mock     # mock API on http://localhost:4000
+  cp .env.example .env             # then fill in as real services land
+
+Coordination: docs/BUILD_CONTRACTS.txt is the frozen contract; log any change
+to it or /shared in INTEGRATION_LOG.txt in the same commit.
