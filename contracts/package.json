@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./deploy.ts",
   "exports": {
-    ".": "./deploy.ts"
+    ".": "./deploy.ts",
+    "./chain": "./chain.ts"
   },
   "scripts": {
     "build:sol": "forge build",

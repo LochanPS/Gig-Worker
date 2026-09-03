@@ -119,12 +119,12 @@ Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
 [x] forge test — all green (34 tests: transitions, access control, reentrancy,
     refund-after-release reverts, fund-with-unverified-party reverts).
 [x] deploy.ts brings up all four contracts on a fresh anvil and writes addresses.
-[ ] real-settlement passes the same lifecycle the simulated one does: a payment
-    goes RATE_LOCKED -> FUNDED (real tx hash) -> SETTLING -> COMPLETED with the
-    payee's on-chain USDC balance increasing by amount-fee.
-[ ] With the chain stopped, backend still boots and (per risk R1) can fall back to
-    simulatedSettlement — never a hard crash.
-[ ] No PII on-chain: only hashes in IdentityRegistry/AuditAnchor/EscrowVault.
+[~] real-settlement lifecycle: chain path proven via script/itest-settlement.ts
+    (fund -> release, payee USDC += amount-fee). Full-stack run through the
+    orchestrator with SETTLEMENT_MODE=real + Postgres remains for Day-2 pairing.
+[x] With the chain stopped, backend still boots — enableRealSettlement() catches
+    any chain error and stays on simulatedSettlement (risk R1). Never a hard crash.
+[x] No PII on-chain: only hashes in IdentityRegistry/AuditAnchor/EscrowVault.
 
 --------------------------------------------------------------------------------
 7. SEED DATA THAT TOUCHES THE CHAIN (as of backend step 8)
@@ -199,18 +199,33 @@ DONE:
   Verified against a live anvil: all four deploy, addresses written, 2nd run
   is a no-op, EscrowVault code confirmed on-chain.
 - contracts/ is now a workspace package (@gigbridge/contracts, viem + tsx).
-  `pnpm --filter @gigbridge/contracts deploy:local` runs it.
-  pnpm-workspace.yaml gained "contracts".
+  contracts/chain.ts exports createChainOps() — the low-level viem ops
+  (fund/release/refund/anchor/setCredential/mint/sendGas/reads), ABIs read from
+  the committed JSON so no Foundry is needed at runtime.
+- REAL SETTLEMENT DONE: backend/src/modules/settlement/real-settlement.ts
+  implements the Settlement port for real (fund = approve + EscrowVault.fund,
+  release/refund, anchorDecision), resolving the payer's demo key from the DB by
+  paymentId. escrowId = keccak256(uuid). Amount scaling minor->USDC (x10^4)
+  centralized in chain.ts (minorToUsdc).
+- ensureChainReady(): boot step that deploys, then for every verified user with
+  a wallet tops up gas, registers their credential on-chain (setCredential), and
+  faucet-mints USDC to company wallets — so EscrowVault.fund()'s verified-party
+  gate + balances pass for the demo actors.
+- Proven on live anvil (script/itest-settlement.ts): deploy -> gas/cred/mint ->
+  payer funds escrow -> platform releases -> payee USDC = amount - fee exactly.
+  Backend typecheck clean; backend 34 tests still green.
 
-HANDOFF for the backend bootstrap (P2 side is a one-liner):
-  import { ensureDeployed } from "@gigbridge/contracts";
-  const addresses = await ensureDeployed();   // {chainId, MockUSDC, ...}
-Addresses land in shared/abis/addresses.local.json (gitignored, runtime).
+ACTIVATION (the swap is env-gated so default behaviour is unchanged):
+  - Backend bootstrap (backend/src/index.ts) now calls enableRealSettlement():
+    when SETTLEMENT_MODE=real it runs ensureChainReady() + setSettlement(real);
+    on ANY chain error it logs and stays on simulatedSettlement (risk R1). With
+    SETTLEMENT_MODE unset/simulated it is a no-op.
+  - To run the real chain demo: start anvil, set SETTLEMENT_MODE=real, boot the
+    backend. Everything else (orchestrator, routes, docs) is unchanged.
+  - Backend deps gained: viem + @gigbridge/contracts (workspace).
 
-NEXT (P1): backend/src/modules/settlement/real-settlement.ts implementing the
-Settlement port with viem (fund = approve + EscrowVault.fund, release/refund,
-anchorDecision, plus a setCredential helper for /admin/verify), a faucet mint +
-setCredential boot step for seeded actors (§7), then setSettlement(real) in the
-app bootstrap. Amount scaling (minor units -> 6-dec USDC, x10^4) centralized and
-unit-tested. Lands Day 2.
+NEXT (P1, Day 2 pairing): full-stack e2e with SETTLEMENT_MODE=real against real
+Postgres (login -> create payment -> confirm -> real fund/release tx -> payee
+on-chain balance up), then the optional event listener (watch PaymentFunded/
+Released for fire-and-confirm) and Day-3 Polygon Amoy deploy.
 ================================================================================

@@ -20,10 +20,12 @@
     "@fastify/cors": "^9.0.0",
     "@fastify/jwt": "^8.0.0",
     "@fastify/websocket": "^10.0.0",
+    "@gigbridge/contracts": "workspace:*",
     "@gigbridge/shared": "workspace:*",
     "@prisma/client": "^5.12.0",
     "bcryptjs": "^2.4.3",
     "fastify": "^4.26.0",
+    "viem": "^2.21.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
