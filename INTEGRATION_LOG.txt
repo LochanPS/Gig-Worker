@@ -19,3 +19,13 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - Added docs/CONTRACTS_AND_SETTLEMENT.txt: the settlement port + contract
     handoff guide for P1. Backend side of the seam is done via simulatedSettlement;
     P1 implements the same Settlement interface for real and calls setSettlement().
+
+[2026-09-03] Backend step 8: seed + demo:reset + init migration (P2 / track/backend)
+  - seed.ts creates the 7 demo actors, credentials, ~43 historical payments, and
+    the structuring pattern (on Novatek->Alex so scenario 1 stays a clean APPROVE).
+  - reset.ts (demo:reset) wipes FK-safe and reseeds; verified idempotent.
+  - Prisma init migration committed (20260903104300_init).
+  - FIX: orchestrator transitioned DRAFT->FLAGGED/REJECTED directly (illegal);
+    now goes DRAFT->COMPLIANCE_CHECK then branches. Found via real e2e run.
+  - PROVEN end-to-end on real Postgres: login/quote/create/compliance/confirm/
+    settle/COMPLETED, admin queue, live alerts. Updated CONTRACTS_AND_SETTLEMENT §7-8.
