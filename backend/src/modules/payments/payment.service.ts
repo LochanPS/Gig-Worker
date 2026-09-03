@@ -8,6 +8,7 @@ import { emitToUsers } from '../../lib/ws.js';
 import { assertTransition, TIMELINE_STEPS } from './state.js';
 import { createQuote, getQuote, isQuoteValid } from '../fx/fx.service.js';
 import { getComplianceEngine } from '../compliance/compliance.interface.js';
+import { raiseAlertsFromRules } from '../alerts/alert.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import type { PaymentState } from '@gigbridge/shared';
 import type { CreatePaymentInput } from '@gigbridge/shared';
@@ -108,6 +109,9 @@ export async function createPayment(companyId: string, input: CreatePaymentInput
     },
   });
   await prisma.payment.update({ where: { id: payment.id }, data: { complianceDecisionId: decision.id } });
+
+  // Raise durable fraud/anomaly alerts (velocity/structuring/outlier/sanctions).
+  await raiseAlertsFromRules(payment.id, outcome.ruleResults);
 
   const to: PaymentState = outcome.verdict === 'APPROVE' ? 'COMPLIANCE_CHECK' : outcome.verdict === 'FLAG' ? 'FLAGGED' : 'REJECTED';
   await transition(payment.id, to, {

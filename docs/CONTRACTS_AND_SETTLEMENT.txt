@@ -1,0 +1,137 @@
+================================================================================
+CONTRACTS & SETTLEMENT — INTEGRATION GUIDE
+Owner: P1 (track/chain). Consumers: P2 backend orchestrator.
+Purpose: the exact seam where the on-chain layer plugs into the backend, so P1
+can build contracts independently and swap the real settlement in with zero
+orchestrator changes. Read alongside docs/TRD.txt §3 and docs/BUILD_CONTRACTS.txt §6.
+================================================================================
+
+--------------------------------------------------------------------------------
+1. THE BIG PICTURE — WHERE CHAIN MEETS BACKEND
+--------------------------------------------------------------------------------
+The backend payment orchestrator (backend/src/modules/payments/payment.service.ts)
+drives every payment through its state machine. At two points it needs the chain:
+
+  RATE_LOCKED --(fund escrow)--> FUNDED --(release)--> SETTLING --> COMPLETED
+                     |                         |
+                     v                         v
+              Settlement.fund()         Settlement.release()
+
+It also anchors each compliance decision hash on-chain at create time
+(AuditAnchor). The orchestrator NEVER imports viem or contract ABIs directly —
+it talks to a single port interface (see §3). Today a SIMULATED implementation
+of that port ships in the backend so the whole lifecycle works with no chain.
+P1's job: implement the SAME interface for real and register it at boot.
+
+--------------------------------------------------------------------------------
+2. THE FOUR CONTRACTS (P1 OWNS — Solidity 0.8.x, Foundry)
+--------------------------------------------------------------------------------
+Signatures are FROZEN in docs/BUILD_CONTRACTS.txt §6. Summary:
+
+  MockUSDC.sol        ERC-20, 6 decimals, onlyOwner mint(address,uint256).
+                      Faucet-minted to company wallets at verification.
+  IdentityRegistry.sol setCredential(address, bytes32 hash, uint64 expiry),
+                      revoke(address), isVerified(address) view.
+                      Stores ONLY the credential hash — never PII (GDPR).
+  EscrowVault.sol     THE CORE. Holds funds between fund() and release().
+                      fund(bytes32 id, address payee, uint256 amount,
+                           uint256 fee, bytes32 complianceHash)
+                      release(bytes32 id)   — payer or PLATFORM_ROLE
+                      refund(bytes32 id)     — payer pre-release, or PLATFORM
+                      freeze/unfreeze(bytes32 id) — PLATFORM_ROLE
+                      events: PaymentFunded, PaymentReleased, PaymentRefunded,
+                              PaymentFrozen
+                      Guards: OZ AccessControl (PLATFORM_ROLE) + ReentrancyGuard,
+                      checks-effects-interactions, verified-party gate via
+                      IdentityRegistry.isVerified.
+  AuditAnchor.sol     anchor(bytes32 hash) -> event Anchored(hash, timestamp).
+
+Test every state transition + access-control failure + reentrancy; all green
+before wiring the backend.
+
+--------------------------------------------------------------------------------
+3. THE SETTLEMENT PORT (already in the backend — implement against THIS)
+--------------------------------------------------------------------------------
+File: backend/src/modules/settlement/settlement.interface.ts
+
+  export interface FundResult { txHash: string; escrowId: string; }
+
+  export interface Settlement {
+    fund(paymentId, payeeWallet, amountMinor, feeMinor, complianceHash): Promise<FundResult>;
+    release(escrowId): Promise<{ txHash: string }>;
+    refund(escrowId): Promise<{ txHash: string }>;
+    anchorDecision(hash): Promise<{ txHash: string }>;
+  }
+
+  export const getSettlement: () => Settlement;   // orchestrator calls this
+  export const setSettlement: (s: Settlement) => void;  // P1 swaps real impl in
+
+Current default export `simulatedSettlement` returns random-but-valid-looking
+tx hashes and escrow ids, no external calls. This is also the ROADMAP risk-R1
+fallback: if the real chain integration slips, the demo still runs and the UI is
+identical.
+
+P1 deliverable: a `realSettlement: Settlement` (viem-backed) plus a call to
+`setSettlement(realSettlement)` at boot. Nothing else in the backend changes.
+
+--------------------------------------------------------------------------------
+4. HOW P1 BUILDS & HANDS OFF (independent until Day 2)
+--------------------------------------------------------------------------------
+Day 1: build /contracts as a standalone Foundry project; full forge test suite.
+       Commit ABIs to /shared/abis/*.json (MockUSDC, IdentityRegistry,
+       EscrowVault, AuditAnchor).
+Day 1 handoff artifact: contracts/deploy.ts — a viem module the backend imports
+       to deploy all four contracts to anvil on boot when absent, writing
+       addresses to /shared/abis/addresses.local.json (gitignored).
+Day 2: implement backend/src/modules/settlement/real-settlement.ts:
+       - viem wallet clients from env (PLATFORM_PRIVATE_KEY, RPC_URL, CHAIN_ID —
+         see docs/BUILD_CONTRACTS.txt §2)
+       - fund(): approve MockUSDC then EscrowVault.fund(); return {txHash, escrowId}
+       - release()/refund(): call the matching EscrowVault fns
+       - anchorDecision(): AuditAnchor.anchor()
+       - setCredential() helper for the identity flow (used by /admin/verify)
+       - an event listener (watch PaymentFunded/Released/Refunded) — optional
+         for the happy path since the orchestrator awaits the tx, but required
+         if you move to fire-and-confirm.
+       Register with setSettlement() in the app bootstrap.
+Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
+
+--------------------------------------------------------------------------------
+5. CONTRACT — AMOUNTS, IDS, HASHES (must match the backend exactly)
+--------------------------------------------------------------------------------
+- Amounts: backend passes minor units (cents/paise) as `amountMinor`/`feeMinor`.
+  MockUSDC has 6 decimals. The real settlement layer converts minor units -> USDC
+  base units (multiply by 10^(6-2) = 10^4, since minor units are already 1/100).
+  Confirm the scaling in one place and unit-test it.
+- escrowId: the backend derives the on-chain id as keccak256(paymentUuid). fund()
+  returns the id it used; the backend stores it on Payment.escrowId and passes it
+  back to release()/refund(). Use bytes32.
+- complianceHash: backend computes keccak256 over the decision; passed into fund()
+  and also anchored via anchorDecision(). Store on-chain in the Payment struct.
+- Wallets: demo wallets are custodial (generated server-side at signup, key in DB,
+  DEMO ONLY). The real settlement signs with PLATFORM_PRIVATE_KEY for platform-role
+  actions; for payer-funded escrow in the demo, the platform may act on the payer's
+  behalf using the stored demo key. Production roadmap: non-custodial payer wallets.
+
+--------------------------------------------------------------------------------
+6. VERIFICATION CHECKLIST BEFORE THE DAY-2 MERGE
+--------------------------------------------------------------------------------
+[ ] forge test — all green (transitions, access control, reentrancy, refund-after-
+    release reverts, fund-with-unverified-party reverts).
+[ ] deploy.ts brings up all four contracts on a fresh anvil and writes addresses.
+[ ] real-settlement passes the same lifecycle the simulated one does: a payment
+    goes RATE_LOCKED -> FUNDED (real tx hash) -> SETTLING -> COMPLETED with the
+    payee's on-chain USDC balance increasing by amount-fee.
+[ ] With the chain stopped, backend still boots and (per risk R1) can fall back to
+    simulatedSettlement — never a hard crash.
+[ ] No PII on-chain: only hashes in IdentityRegistry/AuditAnchor/EscrowVault.
+
+--------------------------------------------------------------------------------
+7. CURRENT STATUS (as of backend step 7)
+--------------------------------------------------------------------------------
+Backend side of the seam is DONE and exercised end-to-end via simulatedSettlement:
+fund/release/refund/anchor are all called at the right state transitions, escrowId
+and txHash are persisted and broadcast over websocket, and the compliance decision
+hash is anchored. P1 implementing §3 + §4 is the only remaining work to make the
+settlement real. Nothing on the backend side needs to change.
+================================================================================
