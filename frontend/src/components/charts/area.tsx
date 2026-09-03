@@ -53,14 +53,14 @@ export interface AreaProps {
   /** Gradient opacity at bottom (0 = fully transparent). Default: 0 */
   gradientToOpacity?: number;
   /**
-   * Vertical extent of the fill gradient (0–1). `1` fades across the full
+   * Vertical extent of the fill gradient (0-1). `1` fades across the full
    * height; lower values compress the gradient toward the top.
    */
   gradientSpan?: number;
   /**
    * Fade the area fill (and stroke) toward transparent at the chart edges.
    * - `true` fades both edges, `false` disables the fade entirely.
-   * - `"left"` / `"right"` fades only that side — useful when the opposite
+   * - `"left"` / `"right"` fades only that side - useful when the opposite
    *   edge butts up against another element you don't want to fade into.
    * Default: false
    */
@@ -228,7 +228,7 @@ export function Area({
 
   const hasDashTail = resolveDashTailBounds(dashFromIndex, data.length);
   // The stroke gradient is only emitted when at least one edge fades, so fall
-  // back to the resolved solid color otherwise — avoids an invalid url(#...).
+  // back to the resolved solid color otherwise - avoids an invalid url(#...).
   const fadeSides = resolveFadeSides(fadeEdges);
   const useViewportEdgeFade = fadeSides.any && !isPatternFill;
   let strokePaint = resolvedStroke;
@@ -325,7 +325,7 @@ export function Area({
         )}
       </SeriesHoverDim>
 
-      {/* Highlight segment on hover — isolated hover subscriber. */}
+      {/* Highlight segment on hover - isolated hover subscriber. */}
       <SeriesHighlightLayer
         enabled={highlightEnabled}
         height={innerHeight}

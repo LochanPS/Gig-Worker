@@ -39,7 +39,7 @@ export type GaugeOrientation = "arc" | "linear";
 export interface GaugeProps {
   /** Arc (default) or horizontal linear notch track */
   orientation?: GaugeOrientation;
-  /** Fill level 0–100 */
+  /** Fill level 0-100 */
   value: number;
   /** Number of notches */
   totalNotches?: number;
@@ -53,7 +53,7 @@ export interface GaugeProps {
   useGradient?: boolean;
   activeGradient?: readonly [string, string];
   inactiveGradient?: readonly [string, string];
-  /** Center statistic — omit to hide the label block */
+  /** Center statistic - omit to hide the label block */
   centerValue?: number;
   defaultLabel?: string;
   prefix?: string;
@@ -73,9 +73,9 @@ export interface GaugeProps {
   height?: number;
   minWidth?: number;
   notchLengthPercent?: number;
-  /** Linear only — notch width as % of each slot (default 80) */
+  /** Linear only - notch width as % of each slot (default 80) */
   notchWidthPercent?: number;
-  /** Linear only — bar thickness in px when responsive (default 24) */
+  /** Linear only - bar thickness in px when responsive (default 24) */
   linearHeight?: number;
   enterTransition?: Transition;
   enterStaggerScale?: number;

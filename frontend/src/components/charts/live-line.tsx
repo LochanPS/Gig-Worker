@@ -240,7 +240,7 @@ export function LiveLine({
         y2={liveDotY}
       />
 
-      {/* Live indicator (dot + badge) — dims when crosshair is active */}
+      {/* Live indicator (dot + badge) - dims when crosshair is active */}
       <motion.g
         animate={{ opacity: isScrubbing ? 0.25 : 1 }}
         transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -290,7 +290,7 @@ export function LiveLine({
           />
         </g>
 
-        {/* Badge — use popover vars so text is never white-on-white */}
+        {/* Badge - use popover vars so text is never white-on-white */}
         {badge && (
           <g transform={`translate(${liveDotX + 12},${liveDotY})`}>
             <rect

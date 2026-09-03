@@ -44,7 +44,7 @@ export interface LiveLinePoint {
 }
 
 export interface LiveLineChartProps {
-  /** Streaming data — array of { time: unixSeconds, value } */
+  /** Streaming data - array of { time: unixSeconds, value } */
   data: LiveLinePoint[];
   /** Latest value (smoothly interpolated to) */
   value: number;
@@ -58,7 +58,7 @@ export interface LiveLineChartProps {
   nowOffsetUnits?: number;
   /** Tight Y-axis. Default: false */
   exaggerate?: boolean;
-  /** Interpolation speed (0–1). Default: 0.08 */
+  /** Interpolation speed (0-1). Default: 0.08 */
   lerpSpeed?: number;
   /** Chart margins */
   margin?: Partial<Margin>;
@@ -465,8 +465,8 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
 
   // ---- Build context-compatible data ----
   // Convert LiveLinePoint[] to Record<string, unknown>[] with 2 virtual points:
-  // 1. At "now" — the live tip where the dot sits
-  // 2. At "now + 1 unit" — a queued point that the line fades into
+  // 1. At "now" - the live tip where the dot sits
+  // 2. At "now + 1 unit" - a queued point that the line fades into
   const contextData = useMemo(() => {
     const windowStart = domainEndMs - windowMs;
     let startIdx = bisectTime(data, windowStart / 1000, 0);
@@ -524,7 +524,7 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
     setTooltipData(null);
   }, []);
 
-  // Date labels (for ChartTooltip's DateTicker — not used in live but needed for context)
+  // Date labels (for ChartTooltip's DateTicker - not used in live but needed for context)
   const dateLabels = useMemo(
     () => contextData.map((d) => hmsTimeFmt.format(xAccessor(d))),
     [contextData, xAccessor]
@@ -613,7 +613,7 @@ const LiveLineChartCore = memo(function LiveLineChartCore({
         <g
           onMouseLeave={handleMouseLeave}
           onMouseMove={handleMouseMove}
-          style={{ cursor: "crosshair" }}
+          style={{ cursor: "default" }}
           transform={`translate(${margin.left},${margin.top})`}
         >
           <rect

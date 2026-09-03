@@ -413,7 +413,7 @@ export interface BarLoadingSkeletonProps {
   fillOpacity?: number;
   /** Bars rise from the bottom or diverge from the vertical center. Default: `"bottom"` */
   baseline?: "bottom" | "center";
-  /** Bar width as a fraction of its band (0–1). Default: 0.7 */
+  /** Bar width as a fraction of its band (0-1). Default: 0.7 */
   barFraction?: number;
   /** One shimmer sweep, in seconds. Default: 2 */
   durationSeconds?: number;

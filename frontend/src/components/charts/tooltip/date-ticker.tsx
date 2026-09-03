@@ -4,7 +4,7 @@ import { motion, useSpring } from "motion/react";
 import { memo, useMemo, useRef } from "react";
 
 const TICKER_ITEM_HEIGHT = 24;
-/** Full scroll stacks are skipped above this count — single label + instant updates. */
+/** Full scroll stacks are skipped above this count - single label + instant updates. */
 const COMPACT_TICKER_THRESHOLD = 60;
 
 export interface DateTickerProps {
@@ -20,7 +20,7 @@ const DateTickerCompact = memo(function DateTickerCompact({
   const label = labels[currentIndex] ?? labels[0] ?? "";
 
   return (
-    <div className="overflow-hidden rounded-full bg-zinc-900 px-4 py-1 text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+    <div className="overflow-hidden rounded-[2px] bg-zinc-900 px-4 py-1 text-white dark:bg-zinc-100 dark:text-zinc-900">
       <div className="flex h-6 items-center justify-center">
         <span className="whitespace-nowrap font-medium text-sm">{label}</span>
       </div>
@@ -93,7 +93,7 @@ const DateTickerInner = memo(function DateTickerInner({
   }
 
   return (
-    <div className="overflow-hidden rounded-full bg-zinc-900 px-4 py-1 text-white shadow-lg dark:bg-zinc-100 dark:text-zinc-900">
+    <div className="overflow-hidden rounded-[2px] bg-zinc-900 px-4 py-1 text-white dark:bg-zinc-100 dark:text-zinc-900">
       <div className="relative h-6 overflow-hidden">
         <div className="flex items-center justify-center gap-1">
           {/* Month stack */}

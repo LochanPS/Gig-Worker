@@ -39,7 +39,7 @@ export interface ChoroplethChartProps {
   animationDuration?: number;
   /** Motion enter transition (spring or cubic-bezier tween). */
   enterTransition?: Transition;
-  /** Signature of motion URL state — triggers enter replay when it changes. */
+  /** Signature of motion URL state - triggers enter replay when it changes. */
   revealSignature?: string;
   /** Aspect ratio as "width / height". Default: "16 / 9" */
   aspectRatio?: string;
@@ -217,7 +217,7 @@ const ChoroplethSvg = memo(function ChoroplethSvg({
       ref={zoom?.containerRef}
       style={{
         contain: "layout style paint",
-        cursor: zoom?.isDragging ? "grabbing" : "grab",
+        cursor: "default",
         touchAction: "none",
       }}
       width={width}

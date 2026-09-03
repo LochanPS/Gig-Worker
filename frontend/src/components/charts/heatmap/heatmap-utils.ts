@@ -45,7 +45,7 @@ export function getHeatmapWeekCount(startSunday: Date, endDate: Date): number {
   );
 }
 
-/** Days in a Sun–Sat column on or after `threshold` (for trimming partial lead weeks). */
+/** Days in a Sun-Sat column on or after `threshold` (for trimming partial lead weeks). */
 export function countHeatmapWeekDaysOnOrAfter(
   weekStart: Date,
   threshold: Date
@@ -78,7 +78,7 @@ export function getHeatmapWeekStartAlignedToRange(
   const weekEnd = new Date(startDate);
   weekEnd.setDate(weekEnd.getDate() + 6);
 
-  // Keep the Sun–Sat column that contains the 1st (e.g. Jan 1 in a partial lead week).
+  // Keep the Sun-Sat column that contains the 1st (e.g. Jan 1 in a partial lead week).
   if (rangeStart >= startDate && rangeStart <= weekEnd) {
     return startDate;
   }
@@ -92,7 +92,7 @@ export function getHeatmapWeekStartAlignedToRange(
   return startDate;
 }
 
-/** Column index for a month label — snaps to separator group start when layout is set. */
+/** Column index for a month label - snaps to separator group start when layout is set. */
 export function getHeatmapMonthLabelColumnIndex(
   columnIndex: number,
   separatorLayout: Pick<HeatmapSeparatorLayout, "atColumns"> | null
@@ -144,7 +144,7 @@ export function resolveHeatmapWeekRange(
   };
 }
 
-/** Month label anchor for a week column — prefers the 1st, else the 1st of the first bin's month. */
+/** Month label anchor for a week column - prefers the 1st, else the 1st of the first bin's month. */
 export function getHeatmapColumnMonthAnchor(
   column: HeatmapColumn
 ): Date | null {
@@ -241,19 +241,19 @@ function formatHeatmapOrdinalDay(day: number): string {
   }
 }
 
-/** Tooltip header date — e.g. `January 20th 2026`. */
+/** Tooltip header date - e.g. `January 20th 2026`. */
 export function formatHeatmapTooltipDate(date: Date): string {
   const month = heatmapTooltipMonthFmt.format(date);
   const day = formatHeatmapOrdinalDay(date.getDate());
   return `${month} ${day} ${date.getFullYear()}`;
 }
 
-/** Tooltip weekday line — e.g. `Monday`. */
+/** Tooltip weekday line - e.g. `Monday`. */
 export function formatHeatmapTooltipWeekday(date: Date): string {
   return heatmapTooltipWeekdayFmt.format(date);
 }
 
-/** Tooltip contribution line — e.g. `3 contributions`. */
+/** Tooltip contribution line - e.g. `3 contributions`. */
 export function formatHeatmapContributionLabel(
   count: number,
   _date?: Date
@@ -273,7 +273,7 @@ export const HEATMAP_DAY_LABELS = [
   "Sat",
 ] as const;
 
-/** First row of the grid — `0` = Sunday (GitHub default). */
+/** First row of the grid - `0` = Sunday (GitHub default). */
 export type HeatmapWeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /** Day labels with row 0 aligned to `weekStartDay`. */
@@ -311,7 +311,7 @@ export function rotateHeatmapColumnBins(
 /** Which Y-axis row ticks to display. */
 export type HeatmapYAxisTickFilter = "all" | "odd" | "even";
 
-/** Y-axis label display — `initial` shows the first letter only (Mon → M). */
+/** Y-axis label display - `initial` shows the first letter only (Mon → M). */
 export type HeatmapYAxisLabelFormat = "full" | "initial";
 
 export function formatHeatmapYAxisLabel(
@@ -340,7 +340,7 @@ export function shouldShowHeatmapYAxisTick(
 /** Layout spacing parsed from {@link HeatmapSeparator}. */
 export type HeatmapSeparatorGroupBy = "every" | "quarter";
 
-/** Separator config from props — resolved to column indices once data is known. */
+/** Separator config from props - resolved to column indices once data is known. */
 export interface HeatmapSeparatorParsedConfig {
   groupBy: HeatmapSeparatorGroupBy;
   every?: number;
@@ -433,7 +433,7 @@ export function resolveHeatmapSeparatorStrokeDasharray(
   return strokeDasharray ?? "4,4";
 }
 
-/** Calendar quarter (1–4) for Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec. */
+/** Calendar quarter (1-4) for Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec. */
 export function getCalendarQuarter(date: Date): number {
   return Math.floor(date.getMonth() / 3) + 1;
 }
@@ -467,7 +467,7 @@ export function getCalendarQuarterStartDatesBetween(
   return dates;
 }
 
-/** Week column index whose Sun–Sat span contains `date`. */
+/** Week column index whose Sun-Sat span contains `date`. */
 export function findHeatmapColumnIndexForDate(
   columns: HeatmapColumn[],
   date: Date
@@ -498,7 +498,7 @@ export function findHeatmapColumnIndexForDate(
   return null;
 }
 
-/** Quarter anchor for a week column — prefers the 1st of a quarter month, else the quarter of the first bin. */
+/** Quarter anchor for a week column - prefers the 1st of a quarter month, else the quarter of the first bin. */
 export function getHeatmapColumnQuarterAnchor(column: HeatmapColumn): {
   quarter: number;
   year: number;
@@ -820,7 +820,7 @@ export function resolveHeatmapDisplayRange(
   return { start: null, end: null };
 }
 
-/** Maps a contribution count to the GitHub-style legend level (0–4). */
+/** Maps a contribution count to the GitHub-style legend level (0-4). */
 export function getHeatmapContributionLevel(count: number): number {
   if (count <= 0) {
     return 0;
@@ -918,7 +918,7 @@ export function resolveHeatmapRowOpacity(
 /**
  * Builds a per-row opacity map for {@link HeatmapCells} and {@link HeatmapYAxis}.
  * Pass explicit row indices (e.g. `[5, 6]` for display Sat/Sun when `weekStartDay={1}`)
- * or a predicate — `(row) => row >= 5` fades the last two rows.
+ * or a predicate - `(row) => row >= 5` fades the last two rows.
  */
 export function buildHeatmapRowOpacity(
   match: readonly number[] | ((row: number) => boolean),
