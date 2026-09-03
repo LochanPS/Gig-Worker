@@ -1,0 +1,167 @@
+================================================================================
+BUILD_CONTRACTS.txt — THE FROZEN INTEGRATION CONTRACT
+Read by ALL THREE build sessions before writing any code. Anything here may
+only change via a note appended to INTEGRATION_LOG.txt in the same commit.
+================================================================================
+
+--------------------------------------------------------------------------------
+1. BOOTSTRAP ORDER (because three separate sessions cannot pair-program)
+--------------------------------------------------------------------------------
+  STEP 0 (P2 ONLY, first ~90 min): P2 scaffolds the monorepo on branch
+    track/backend and merges to main IMMEDIATELY:
+      pnpm workspace (contracts, backend, frontend, shared, infra),
+      /shared package with ALL types below, eslint/prettier, docker-compose
+      skeleton, .env.example, this file untouched.
+    P2 then pushes and posts "SCAFFOLD MERGED" to INTEGRATION_LOG.txt.
+  MEANWHILE: P1 works in /contracts as a standalone Foundry project (no
+    monorepo dependency); P3 drafts components in an isolated Vite app.
+    Both rebase onto main as soon as SCAFFOLD MERGED appears, then move
+    their work into the monorepo folders.
+  MERGE RULES: each track merges its branch into main at every sync point
+    (Day1 noon, Day1 EOD, Day2 EOD, Day3 noon freeze). Pull main before
+    pushing. Never edit another track's folder except /shared additions
+    logged in INTEGRATION_LOG.txt. Conflicts in /shared: P2 is the owner
+    and tiebreaker.
+
+--------------------------------------------------------------------------------
+2. PORTS, URLS, ENV
+--------------------------------------------------------------------------------
+  frontend  http://localhost:5173      (Vite dev)
+  backend   http://localhost:4000      (REST base /api/v1, WS at /ws)
+  postgres  localhost:5432             db=gigbridge user=gigbridge
+  anvil     http://localhost:8545      chain-id 31337
+
+  .env.example (backend):
+    DATABASE_URL=postgresql://gigbridge:gigbridge@localhost:5432/gigbridge
+    JWT_SECRET=dev-only-change-me
+    RPC_URL=http://localhost:8545
+    CHAIN_ID=31337
+    PLATFORM_PRIVATE_KEY=<anvil account 0 key — DEMO ONLY>
+    DEPLOYER_PRIVATE_KEY=<anvil account 0 key — DEMO ONLY>
+    ANTHROPIC_API_KEY=            (optional; empty => template explanations)
+    FX_API_URL=https://api.frankfurter.app
+    FX_OFFLINE=false              (true => use /backend/src/fx/fallback.json)
+    FEE_BPS=75
+    FEE_MIN_USD=1
+    RATE_LOCK_MINUTES=10
+  Demo wallets: generated server-side at signup (ethers/viem random),
+  private keys stored in DB column FreelancerProfile/CompanyProfile
+  .demoWalletKey (plaintext, DEMO ONLY, clearly commented). Faucet: backend
+  mints 100,000 MockUSDC to every company wallet at verification.
+
+--------------------------------------------------------------------------------
+3. CANONICAL ENUMS AND TYPES (source of truth: /shared/src/types.ts)
+--------------------------------------------------------------------------------
+  PaymentState = 'DRAFT' | 'COMPLIANCE_CHECK' | 'FLAGGED' | 'REJECTED'
+    | 'RATE_LOCKED' | 'FUNDED' | 'SETTLING' | 'COMPLETED' | 'REFUNDED'
+    | 'EXPIRED'
+  Verdict     = 'APPROVE' | 'FLAG' | 'REJECT'
+  Role        = 'COMPANY' | 'FREELANCER' | 'ADMIN'
+  KycStatus   = 'PENDING' | 'VERIFIED' | 'REJECTED'
+  AlertType   = 'VELOCITY' | 'STRUCTURING' | 'OUTLIER' | 'SANCTIONS'
+  Currency    = 'EUR' | 'USD' | 'INR'
+  Corridor pairs used in demo: EURINR, USDINR, INRUSD.
+  Amounts: integers in minor units (cents/paise) everywhere in API and DB;
+  MockUSDC has 6 decimals; conversion happens only in the settlement layer.
+  IDs: uuid v4 strings. Payment.escrowId on-chain = keccak256(uuid).
+
+--------------------------------------------------------------------------------
+4. REST API CONTRACT (frozen paths; bodies per /shared zod schemas)
+--------------------------------------------------------------------------------
+  POST /api/v1/auth/register        {email,password,role,country,name...}
+  POST /api/v1/auth/login           -> {token, user}
+  GET  /api/v1/auth/me
+  POST /api/v1/kyc/submit           freelancer docs (mock)
+  POST /api/v1/kyb/submit           company details
+  POST /api/v1/admin/verify/:userId issues credential + on-chain hash
+  GET  /api/v1/credentials/me
+  GET  /api/v1/fx/quote?pair=EURINR&amount=50000   (amount in minor units)
+       -> {midRate, fee, gasEstimate, payeeReceives, quoteId, expiresAt}
+  GET  /api/v1/fx/history?pair=EURINR&days=30
+  POST /api/v1/payments             {payeeId, srcCurrency, dstCurrency,
+                                     srcAmountMinor, purposeCode,
+                                     invoiceRef?} -> payment in
+                                     COMPLIANCE_CHECK, then verdict applied
+  POST /api/v1/payments/:id/confirm {quoteId} -> locks rate, funds escrow
+  POST /api/v1/payments/:id/release
+  POST /api/v1/payments/:id/refund
+  GET  /api/v1/payments             (role-scoped list)
+  GET  /api/v1/payments/:id         (includes timeline[] and compliance)
+  POST /api/v1/invoices             {companyId, amountMinor, currency, memo}
+  POST /api/v1/invoices/:id/approve -> creates payment draft
+  GET  /api/v1/admin/queue          flagged payments
+  POST /api/v1/admin/queue/:id/resolve {action:'APPROVE'|'REJECT', note}
+  GET  /api/v1/admin/alerts
+  GET  /api/v1/admin/metrics
+  GET  /api/v1/admin/rules
+  GET  /api/v1/payments/:id/receipt.pdf
+  Auth: Authorization: Bearer <jwt>. Errors: {error:{code,message}} with
+  proper HTTP status. WS auth: ?token=<jwt> query param.
+
+--------------------------------------------------------------------------------
+5. WEBSOCKET EVENTS (server -> client JSON)
+--------------------------------------------------------------------------------
+  {type:'payment.state', paymentId, state, timeline}   (to payer, payee, admins)
+  {type:'alert.new', alert}                            (admins)
+  {type:'notification.new', notification}              (target user)
+  {type:'metrics.tick', metrics}                       (admins, every 5s)
+
+--------------------------------------------------------------------------------
+6. SMART CONTRACT INTERFACE (frozen signatures; P1 owns implementation)
+--------------------------------------------------------------------------------
+  MockUSDC:        standard ERC20 + mint(address,uint256) onlyOwner
+  IdentityRegistry: setCredential(address,bytes32 hash,uint64 expiry),
+                    revoke(address), isVerified(address) view returns(bool)
+  EscrowVault:
+    fund(bytes32 id, address payee, uint256 amount, uint256 fee,
+         bytes32 complianceHash)            // payer calls after approve()
+    release(bytes32 id)                     // payer or PLATFORM_ROLE
+    refund(bytes32 id)                      // payer pre-release, or PLATFORM
+    freeze(bytes32 id) / unfreeze(bytes32 id)  // PLATFORM_ROLE
+    events: PaymentFunded(id,payer,payee,amount,fee,complianceHash),
+            PaymentReleased(id), PaymentRefunded(id), PaymentFrozen(id)
+  AuditAnchor:     anchor(bytes32 hash) -> event Anchored(hash, timestamp)
+  ABI HANDOFF: P1 commits build artifacts to /shared/abis/*.json plus
+  /shared/abis/addresses.local.json written by the deploy script on boot.
+  Deploy-on-boot: backend runs `forge script` output OR P1 provides a
+  TypeScript deploy module `contracts/deploy.ts` (preferred) the backend
+  imports and calls when anvil has no code at the expected address.
+
+--------------------------------------------------------------------------------
+7. SEED DATA SPEC (P2 implements; P3 relies on exact names)
+--------------------------------------------------------------------------------
+  Companies:  Novatek GmbH (DE, verified) — login novatek@demo.gg / demo1234
+              Chennai Softworks (IN, verified) — chennai@demo.gg / demo1234
+  Freelancers: Priya Sharma (IN, verified, PAN set) — priya@demo.gg
+               Alex Carter (US, verified) — alex@demo.gg
+               Uma Rao (IN, KYC pending) — uma@demo.gg
+  Admin:      admin@demo.gg / demo1234
+  Watchlist:  "SanctionedCo" entity + one freelancer alias on mock SDN list.
+  History:    ~40 completed payments over 30 days across EURINR/USDINR
+              (feeds charts), FX history cached, one pre-built structuring
+              alert (3 payments of EUR 9,400 within 72h).
+  demo:reset  = drop schema -> migrate -> reseed -> redeploy contracts.
+
+--------------------------------------------------------------------------------
+8. COMPLIANCE THRESHOLDS (frozen numbers used by rules AND seed data)
+--------------------------------------------------------------------------------
+  IN-RBI-002 PAN required        > INR 50,000 equivalent
+  EU-AML-001 EDD flag            > EUR 10,000 single payment
+  IN-LRS-001 annual cap          USD 250,000 per Indian payer entity
+  GB-VEL-001 velocity            > 5 payments same payer->payee in 24h
+  GB-STR-001 structuring         >= 3 payments each within 10% below the
+                                 EUR 10,000 threshold inside 72h
+  GB-OUT-001 outlier             > 5x payee trailing 90-day average
+  Fee: 75 bps, minimum USD 1 equivalent. Rate lock: 10 minutes.
+  Purpose codes offered: P0802 (software), P0801 (IT consultancy),
+  P1006 (design), P0805 (data processing).
+
+--------------------------------------------------------------------------------
+9. DEFINITION OF DONE PER SYNC POINT
+--------------------------------------------------------------------------------
+  Day1 noon:  scaffold merged; ABIs in /shared/abis; mock API serving.
+  Day1 EOD:   auth real; quote endpoint real; contracts fully forge-tested;
+              dashboards render on mock data.
+  Day2 EOD:   Scenario 1 end-to-end real on anvil across all dashboards.
+  Day3 noon:  Scenarios 1-4 pass from clean `docker compose up`; freeze.
+================================================================================
