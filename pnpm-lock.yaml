@@ -38,6 +38,9 @@ importers:
       '@fastify/websocket':
         specifier: ^10.0.0
         version: 10.0.1
+      '@gigbridge/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@gigbridge/shared':
         specifier: workspace:*
         version: link:../shared
@@ -50,6 +53,9 @@ importers:
       fastify:
         specifier: ^4.26.0
         version: 4.29.1
+      viem:
+        specifier: ^2.21.0
+        version: 2.56.3(typescript@5.9.3)(zod@3.25.76)
       zod:
         specifier: ^3.23.0
         version: 3.25.76

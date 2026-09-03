@@ -87,3 +87,21 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
     CONTRACTS_AND_SETTLEMENT.txt (P1-owned) is untouched — frontend doesn't touch it.
   NOTE for P3: pick this up on track/frontend; §4 of FRONTEND_INTEGRATION lists
   the remaining screens + polish.
+
+[2026-09-03] REAL SETTLEMENT implemented (P1 / track/chain)
+  - contracts/chain.ts: createChainOps() — low-level viem ops (fund/release/
+    refund/anchor/setCredential/mint/sendGas/reads); ABIs from committed JSON.
+  - backend/src/modules/settlement/real-settlement.ts: implements the Settlement
+    port for real (resolves payer demo key from DB by paymentId; escrowId =
+    keccak256(uuid); minor->USDC x10^4). ensureChainReady() boot step deploys +
+    gas-tops-up + setCredential + faucet-mints verified actors. enableRealSettlement()
+    wired into backend/src/index.ts, GATED by SETTLEMENT_MODE=real; falls back to
+    simulatedSettlement on any chain error (risk R1). Default behaviour unchanged.
+  - ROOT/BACKEND CHANGE: backend/package.json gained deps viem + @gigbridge/
+    contracts (workspace); contracts/package.json exports "./chain". Run
+    `pnpm install`. To demo real chain: anvil up + SETTLEMENT_MODE=real.
+  - PROVEN on live anvil (contracts/script/itest-settlement.ts): payer funds
+    escrow -> platform releases -> payee USDC = amount-fee exactly. Backend
+    typecheck clean, 34 backend tests green, 34 forge tests green.
+  - Updated CONTRACTS_AND_SETTLEMENT §6/§10. NEXT: Day-2 full-stack e2e with
+    Postgres + SETTLEMENT_MODE=real; optional event listener; Day-3 Amoy.
