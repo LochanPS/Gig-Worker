@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Payment } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { useWs } from '../../lib/ws.js';
 import { money, Chip, Stat } from '../../components/bits.js';
+import Sparkline from '../../components/Sparkline.js';
 
 export default function Overview() {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [fx, setFx] = useState<number[]>([]);
+  const nav = useNavigate();
   const load = () => api.payments().then(setPayments).catch(() => {});
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    api.fxHistory('EURINR', 30).then((h) => setFx(h.map((d) => d.rate))).catch(() => {});
+  }, []);
   useWs((e) => { if (e.type === 'payment.state') load(); });
 
   const paid = payments.filter((p) => p.state === 'COMPLETED');
@@ -27,6 +33,11 @@ export default function Overview() {
         <Stat label="Avg settlement" value="~47 sec" ghost="vs 3–5 days" />
       </div>
 
+      <div className="card" style={{ marginBottom: 22 }}>
+        <div className="label" style={{ marginBottom: 6 }}>EUR → INR · last 30 days</div>
+        <Sparkline data={fx} label="EUR to INR" />
+      </div>
+
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 15 }}>Payouts</h2>
         <Link className="btn" to="/company/pay">New payout</Link>
@@ -37,7 +48,7 @@ export default function Overview() {
           <thead><tr><th>Payee</th><th>Amount</th><th>Corridor</th><th>Status</th><th>Date</th></tr></thead>
           <tbody>
             {payments.slice(0, 25).map((p) => (
-              <tr key={p.id}>
+              <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/company/payments/${p.id}`)}>
                 <td className="mono">{p.freelancerId.slice(0, 8)}</td>
                 <td>{money(p.srcAmountMinor, p.srcCurrency)}</td>
                 <td className="mono">{p.srcCurrency}→{p.dstCurrency}</td>
