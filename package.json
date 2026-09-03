@@ -1,0 +1,23 @@
+{
+  "name": "gigbridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GigBridge — autonomous cross-border freelancer payment gateway (monorepo)",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "shared:build": "pnpm --filter @gigbridge/shared build",
+    "backend:dev": "pnpm --filter @gigbridge/backend dev",
+    "demo:reset": "pnpm --filter @gigbridge/backend demo:reset"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

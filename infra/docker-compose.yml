@@ -1,0 +1,55 @@
+# GigBridge — one-command demo stack (TRD 7). SKELETON: services fleshed out
+# per track. `docker compose up` must boot the whole demo offline-safe.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gigbridge
+      POSTGRES_PASSWORD: gigbridge
+      POSTGRES_DB: gigbridge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gigbridge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # P1 owns: local EVM chain for the offline-safe demo.
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ["anvil", "--host", "0.0.0.0"]
+    ports:
+      - "8545:8545"
+
+  # P2 owns: Fastify API. Auto-migrates, auto-deploys contracts, seeds on boot.
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      anvil:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://gigbridge:gigbridge@postgres:5432/gigbridge
+      CHAIN_RPC_URL: http://anvil:8545
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+
+  # P3 owns: React SPA (dev server or static build behind nginx).
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:

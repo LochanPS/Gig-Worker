@@ -1,0 +1,26 @@
+================================================================================
+INTEGRATION LOG — GIGBRIDGE
+Append-only. Any change to /shared (the interface treaty) or any cross-track
+contract (ABIs, deployed addresses, ws events, env keys) gets a line here.
+Format: [DATE] [TRACK] what changed + who is affected.
+================================================================================
+
+[2026-09-03] [P2] Monorepo scaffolded (pnpm workspaces: shared, backend,
+             frontend, contracts). Node 20+, TS 5.6, strict.
+[2026-09-03] [P2] /shared v0.1 published (INTERFACE TREATY). Contents:
+             - enums.ts        roles, payment states, verdicts, currencies,
+                               fx pairs, alert types, escrow states, purpose codes
+             - entities.ts     User, CompanyProfile, FreelancerProfile,
+                               Credential, FxRate, Payment, ComplianceDecision,
+                               RuleResult, Alert, Invoice, Notification, EscrowInfo
+             - schemas.ts      zod for all API request bodies + Fx quote
+             - api-contract.ts ENDPOINTS map + all response payload types
+             - ws-events.ts    WsEvent union (payment.state, compliance.decided,
+                               alert.new, notif.new, payment.created)
+             - state-machine.ts PAYMENT_TRANSITIONS + canTransition + TIMELINE_ORDER
+             AFFECTS: P3 generate mock API from api-contract.ts + schemas.ts.
+                      P1 drop ABIs in shared/src/abis/ by Day 1 noon.
+             Import as `@gigbridge/shared`.
+
+--- P1, note ABI + deployed-address changes below this line ---
+--- P3, note any api-contract additions you need below this line ---
