@@ -62,3 +62,16 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - HTML-escaped (injection-safe), auth-gated (401 without token). Proven live.
   - All 10 backend steps done; 34 tests green. Settlement seam (§3) is the only
     remaining P1 integration point. Updated CONTRACTS_AND_SETTLEMENT §9.
+
+[2026-09-03] DEPLOY-ON-BOOT ready (P1 / track/chain)
+  - contracts/deploy.ts (viem): ensureDeployed() deploys the four contracts to
+    anvil when absent, writes shared/abis/addresses.local.json (gitignored),
+    idempotent. Verified against live anvil (all four deploy, 2nd run no-op,
+    on-chain code confirmed). Backend bootstrap: `import { ensureDeployed } from
+    "@gigbridge/contracts"; await ensureDeployed();`.
+  - shared/abis/*.json now carry { abi, bytecode } (deploy needs no Foundry).
+    Regenerate: `node contracts/script/export-abis.mjs`.
+  - contracts/ is now a workspace package @gigbridge/contracts (viem + tsx).
+    ROOT CHANGE: pnpm-workspace.yaml gained "contracts" — run `pnpm install`.
+  - Added docs/ROADMAP_SIMPLE.txt; updated CONTRACTS_AND_SETTLEMENT §6/§9.
+  - NEXT (P1): backend real-settlement.ts implementing the Settlement port.

@@ -116,9 +116,9 @@ Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
 --------------------------------------------------------------------------------
 6. VERIFICATION CHECKLIST BEFORE THE DAY-2 MERGE
 --------------------------------------------------------------------------------
-[ ] forge test — all green (transitions, access control, reentrancy, refund-after-
-    release reverts, fund-with-unverified-party reverts).
-[ ] deploy.ts brings up all four contracts on a fresh anvil and writes addresses.
+[x] forge test — all green (34 tests: transitions, access control, reentrancy,
+    refund-after-release reverts, fund-with-unverified-party reverts).
+[x] deploy.ts brings up all four contracts on a fresh anvil and writes addresses.
 [ ] real-settlement passes the same lifecycle the simulated one does: a payment
     goes RATE_LOCKED -> FUNDED (real tx hash) -> SETTLING -> COMPLETED with the
     payee's on-chain USDC balance increasing by amount-fee.
@@ -182,4 +182,35 @@ BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
 compliance, agent, alerts, seed/reset, invoices, documents), 34 unit tests
 green, every flow proven end-to-end against a real Postgres. The settlement seam
 (§3) is the single remaining integration point for P1's real chain.
+
+--------------------------------------------------------------------------------
+10. P1 STATUS (track/chain)
+--------------------------------------------------------------------------------
+DONE:
+- All four contracts built + forge-tested (34 tests green): MockUSDC,
+  IdentityRegistry, EscrowVault, AuditAnchor. Signatures match §2/§3 and
+  BUILD_CONTRACTS §6 exactly.
+- ABIs + bytecode exported to shared/abis/*.{json,ts} (+ index.ts). The .json
+  now carries { abi, bytecode }; regenerate with
+  `node contracts/script/export-abis.mjs`. Committed so deploy needs no Foundry.
+- contracts/deploy.ts (viem): `ensureDeployed()` deploys all four to anvil on
+  boot when absent (idempotent — reuses shared/abis/addresses.local.json when
+  code is already present) and `deployContracts()` forces a fresh deploy.
+  Verified against a live anvil: all four deploy, addresses written, 2nd run
+  is a no-op, EscrowVault code confirmed on-chain.
+- contracts/ is now a workspace package (@gigbridge/contracts, viem + tsx).
+  `pnpm --filter @gigbridge/contracts deploy:local` runs it.
+  pnpm-workspace.yaml gained "contracts".
+
+HANDOFF for the backend bootstrap (P2 side is a one-liner):
+  import { ensureDeployed } from "@gigbridge/contracts";
+  const addresses = await ensureDeployed();   // {chainId, MockUSDC, ...}
+Addresses land in shared/abis/addresses.local.json (gitignored, runtime).
+
+NEXT (P1): backend/src/modules/settlement/real-settlement.ts implementing the
+Settlement port with viem (fund = approve + EscrowVault.fund, release/refund,
+anchorDecision, plus a setCredential helper for /admin/verify), a faucet mint +
+setCredential boot step for seeded actors (§7), then setSettlement(real) in the
+app bootstrap. Amount scaling (minor units -> 6-dec USDC, x10^4) centralized and
+unit-tested. Lands Day 2.
 ================================================================================

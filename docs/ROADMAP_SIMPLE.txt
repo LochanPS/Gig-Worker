@@ -1,0 +1,64 @@
+================================================================================
+GIGBRIDGE — SIMPLE ROADMAP (per path + flow)
+Quick-reference companion to ROADMAP_3_PERSON_3_DAY.txt. Status as of P1 step 7.
+================================================================================
+
+P1 — CHAIN & SETTLEMENT  (branch track/chain)
+  1. Foundry init + deps (OZ, forge-std)              [done]
+  2. MockUSDC.sol                                     [done, tested]
+  3. IdentityRegistry.sol                             [done, tested]
+  4. EscrowVault.sol (core escrow)                    [done, tested]
+  5. AuditAnchor.sol                                  [done, tested]
+  6. forge test suite (34 tests)                      [green]
+  7. Export ABIs -> shared/abis                       [on main, unblocks P2]
+  8. deploy.ts (deploy-on-boot -> addresses.local)    [next]
+  9. real-settlement.ts (viem: fund/release/refund/anchor/setCredential)
+  10. Event listener + demo wallets + faucet mint
+  11. Day2: pair P2, wire real pipeline end-to-end
+  12. Day3: Polygon Amoy + explorer links (optional)
+
+P2 — BACKEND & AGENT  (branch track/backend)
+  1. Scaffold + /shared treaty + mock API             [done]
+  2. Prisma data model + auth (JWT/RBAC)              [done]
+  3. Payment orchestrator (state machine + WS)        [done]
+  4. FX engine (live + offline + history)             [done]
+  5. Compliance rule engine (10 rules)                [done]
+  6. Agent service (LLM + template fallback)          [done]
+  7. Anomaly detection + alerts                       [done]
+  8. Invoice endpoints                                [done]
+  9. Seed data + demo:reset
+  10. PDF receipt / compliance report
+  11. Day2: swap real settlement from P1
+
+P3 — FRONTEND & DEMO  (branch track/frontend)
+  1. Auth pages + role-routed shell (on mock API)
+  2. Shared components (StatusChip, QuoteCard, FeeBreakdown, Timeline, AgentPanel)
+  3. Company overview + payouts table
+  4. New Payout wizard (4-step, the centerpiece)
+  5. WS client + live payment timeline
+  6. Freelancer dashboard + "you kept 99.X%"
+  7. Admin (monitor, queue, alerts, rules)
+  8. Invoices + batch payout
+  9. Notifications (toasts + bell)
+  10. Polish + pitch deck + demo recording
+
+FLOW — one payment, end to end
+  Company clicks New Payout
+    -> POST /payments
+    -> Compliance engine runs 10 rules -> verdict (APPROVE / FLAG / REJECT)
+    -> Agent writes plain-English reasoning
+    -> decision hash anchored on-chain (AuditAnchor)
+    -> FX quote + 10-min rate lock shown (fee vs PayPal)
+    -> Company confirms
+    -> EscrowVault.fund()   [state: FUNDED]
+    -> EscrowVault.release() [SETTLING -> COMPLETED]
+    -> payee gets amount-fee, treasury gets fee
+    -> WebSocket ticks all 3 dashboards live
+    -> Freelancer sees money + "You kept 99.25%"
+
+SYNC POINTS — all three converge
+  Day1 noon : scaffold + ABIs + mock API up
+  Day1 EOD  : auth + quote real; contracts tested; dashboards on mock
+  Day2 EOD  : Scenario 1 real on anvil across all dashboards   <- big checkpoint
+  Day3 noon : all 4 scenarios from `docker compose up`; freeze
+================================================================================
