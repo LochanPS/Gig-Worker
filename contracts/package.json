@@ -1,0 +1,23 @@
+{
+  "name": "@gigbridge/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./deploy.ts",
+  "exports": {
+    ".": "./deploy.ts"
+  },
+  "scripts": {
+    "build:sol": "forge build",
+    "test:sol": "forge test",
+    "export-abis": "node script/export-abis.mjs",
+    "deploy:local": "tsx deploy.ts"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/node": "^22.9.0"
+  }
+}
