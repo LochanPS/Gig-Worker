@@ -50,6 +50,17 @@ export interface Credential {
   anchorTxHash: string | null;
 }
 
+// Descriptor for a document the backend can render for a payment. The backend is
+// the single source of truth for availability (receipt/FIRC need COMPLETED, FIRC
+// needs INR, compliance needs a decision) so the UI never re-encodes those rules.
+export interface PaymentDocument {
+  kind: 'receipt' | 'compliance' | 'firc';
+  title: string;
+  url: string; // ready-to-fetch API path, e.g. /api/v1/payments/<id>/firc.pdf
+  available: boolean;
+  reason?: string; // why it is not yet available (for a disabled control's tooltip)
+}
+
 export interface TimelineStep {
   key: string; // e.g. 'CREATED', 'COMPLIANCE_APPROVED', 'RATE_LOCKED', ...
   label: string;

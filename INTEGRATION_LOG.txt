@@ -133,3 +133,20 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - P1 TRACK COMPLETE: contracts + settlement + event listener, proven full-
     stack. Only deferred item is Day-3 Polygon Amoy (venue-risk; local anvil is
     the demo path). Backend typecheck clean; 34 backend + 34 forge tests green.
+
+[2026-09-03] Documents track: FIRC + credential + descriptor (frontend track)
+  - The "printed aspect": added the missing documents so the print/document backend
+    is complete. All are chain-agnostic (render whatever the active Settlement wrote).
+  - FIRC (Foreign Inward Remittance Certificate): GET /payments/:id/firc.pdf.
+    COMPLETED + INR-credited only (400/409 guards). Remitter/beneficiary/amounts/
+    rate/purpose/on-chain refs from existing rows — no schema change.
+  - Credential certificate: new credentials module. GET /credentials/me (PII-safe,
+    never returns credentialJs) for the identity card; GET /credentials/:id/
+    credential.pdf (owner-or-admin, 403 otherwise). Reuses document shell/esc.
+  - Document descriptor: GET /payments/:id/documents -> PaymentDocument[]; backend
+    owns availability rules (one pure fn) so the UI doesn't re-encode them.
+  - SHARED CHANGE: added interface PaymentDocument to shared/src/types.ts (additive,
+    non-breaking). No enum/constant/schema changes.
+  - Backend + shared typecheck clean; 44 backend tests green (was 34: +2 FIRC,
+    +4 credential, +4 descriptor). Updated CONTRACTS_AND_SETTLEMENT §9.
+  - Frontend not yet wired to these — pending a UI rebuild against design refs.

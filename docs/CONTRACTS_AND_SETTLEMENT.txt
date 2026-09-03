@@ -230,12 +230,23 @@ Credential certificate — /credentials/:id/credential.pdf (+ /credentials/me)
   the one settlement enforces. Pure helpers (credentialStatus, publicCredential) are
   DB-free unit-tested.
 
+Document descriptor — GET /payments/:id/documents
+  Returns PaymentDocument[] (shared type): { kind, title, url, available, reason }
+  for receipt / compliance / firc. The BACKEND owns availability so the UI never
+  re-encodes the rules: compliance available once a decision exists; receipt once
+  COMPLETED; FIRC once COMPLETED and dstCurrency === 'INR' (else a human-readable
+  `reason`). URLs are ready to fetch under /api/v1. The rule set lives in one pure,
+  unit-tested function (document.service.ts :: paymentDocuments) shared by this
+  endpoint — add a new document kind there and both the descriptor and its
+  availability update in one place.
+
 BACKEND STATUS: all 10 steps complete (schema, auth, orchestrator, FX,
 compliance, agent, alerts, seed/reset, invoices, documents), plus documents added
-on the frontend track — receipt + compliance + FIRC + credential certificate, with
-GET /credentials/me for the identity card — 40 unit tests green, every flow proven
-end-to-end against a real Postgres. The settlement seam (§3) is the single
-remaining integration point for P1's real chain.
+on the frontend track — receipt + compliance + FIRC + credential certificate, a
+GET /credentials/me for the identity card, and a GET /payments/:id/documents
+descriptor — 44 unit tests green, every flow proven end-to-end against a real
+Postgres. The settlement seam (§3) is the single remaining integration point for
+P1's real chain.
 
 --------------------------------------------------------------------------------
 10. P1 STATUS (track/chain)

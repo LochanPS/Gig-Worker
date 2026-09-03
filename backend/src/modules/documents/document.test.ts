@@ -1,6 +1,6 @@
 // Tests the money/escape helpers used by the document generator (pure, no DB).
 import { describe, it, expect } from 'vitest';
-import { fircCertNumber, purposeDescription } from './document.service.js';
+import { fircCertNumber, purposeDescription, paymentDocuments } from './document.service.js';
 
 // Re-declare the same helpers to test their behaviour (kept in sync with service).
 const money = (minor: number | null | undefined, ccy: string) =>
@@ -36,5 +36,41 @@ describe('FIRC helpers', () => {
     expect(purposeDescription('P9999')).toBe('P9999'); // unknown code passes through
     expect(purposeDescription(null)).toBe('Not specified');
     expect(purposeDescription(undefined)).toBe('Not specified');
+  });
+});
+
+describe('paymentDocuments', () => {
+  const byKind = (docs: ReturnType<typeof paymentDocuments>) =>
+    Object.fromEntries(docs.map((d) => [d.kind, d]));
+
+  it('makes all three available for a COMPLETED INR remittance with a decision', () => {
+    const d = byKind(paymentDocuments({ id: 'p1', state: 'COMPLETED', dstCurrency: 'INR', hasDecision: true }));
+    expect(d.compliance.available).toBe(true);
+    expect(d.receipt.available).toBe(true);
+    expect(d.firc.available).toBe(true);
+    expect(d.firc.url).toBe('/api/v1/payments/p1/firc.pdf');
+    for (const doc of Object.values(d)) expect(doc.reason).toBeUndefined();
+  });
+
+  it('gates receipt and FIRC until completion; compliance stays available', () => {
+    const d = byKind(paymentDocuments({ id: 'p2', state: 'FUNDED', dstCurrency: 'INR', hasDecision: true }));
+    expect(d.compliance.available).toBe(true);
+    expect(d.receipt.available).toBe(false);
+    expect(d.receipt.reason).toBe('Available once the payment is completed');
+    expect(d.firc.available).toBe(false);
+    expect(d.firc.reason).toBe('Available once the payment is completed');
+  });
+
+  it('withholds FIRC for a non-INR corridor even when completed', () => {
+    const d = byKind(paymentDocuments({ id: 'p3', state: 'COMPLETED', dstCurrency: 'USD', hasDecision: true }));
+    expect(d.receipt.available).toBe(true);
+    expect(d.firc.available).toBe(false);
+    expect(d.firc.reason).toBe('Only for remittances credited in INR');
+  });
+
+  it('marks compliance unavailable before a decision exists', () => {
+    const d = byKind(paymentDocuments({ id: 'p4', state: 'DRAFT', dstCurrency: 'INR', hasDecision: false }));
+    expect(d.compliance.available).toBe(false);
+    expect(d.compliance.reason).toBe('Compliance has not run yet');
   });
 });

@@ -2,8 +2,49 @@
 // a compliance report. The browser turns these into PDF via print-to-PDF, so there
 // is no heavy PDF dependency (roadmap: PDFs are lowest priority, keep it demo-safe).
 import { prisma } from '../../lib/db.js';
-import type { RuleResult, PurposeCode } from '@gigbridge/shared';
+import type { RuleResult, PurposeCode, PaymentState, PaymentDocument } from '@gigbridge/shared';
 import { PURPOSE_CODE_LABELS } from '@gigbridge/shared';
+
+// Which documents exist for a payment, and whether each is available yet. The
+// backend owns these rules so the UI can render buttons straight from the result
+// (pure — unit-tested without a DB). URLs are ready to fetch under /api/v1.
+export function paymentDocuments(p: {
+  id: string;
+  state: PaymentState;
+  dstCurrency: string;
+  hasDecision: boolean;
+}): PaymentDocument[] {
+  const url = (kind: string) => `/api/v1/payments/${p.id}/${kind}.pdf`;
+  const completed = p.state === 'COMPLETED';
+  const notCompletedReason = 'Available once the payment is completed';
+  return [
+    {
+      kind: 'compliance',
+      title: 'Compliance report',
+      url: url('compliance'),
+      available: p.hasDecision,
+      ...(p.hasDecision ? {} : { reason: 'Compliance has not run yet' }),
+    },
+    {
+      kind: 'receipt',
+      title: 'Receipt',
+      url: url('receipt'),
+      available: completed,
+      ...(completed ? {} : { reason: notCompletedReason }),
+    },
+    {
+      kind: 'firc',
+      title: 'FIRC (remittance certificate)',
+      url: url('firc'),
+      available: completed && p.dstCurrency === 'INR',
+      ...(completed
+        ? p.dstCurrency === 'INR'
+          ? {}
+          : { reason: 'Only for remittances credited in INR' }
+        : { reason: notCompletedReason }),
+    },
+  ];
+}
 
 const money = (minor: number | null | undefined, ccy: string) =>
   minor == null ? '—' : `${ccy} ${(minor / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
