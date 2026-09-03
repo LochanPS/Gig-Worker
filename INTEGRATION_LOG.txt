@@ -105,3 +105,19 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
     typecheck clean, 34 backend tests green, 34 forge tests green.
   - Updated CONTRACTS_AND_SETTLEMENT §6/§10. NEXT: Day-2 full-stack e2e with
     Postgres + SETTLEMENT_MODE=real; optional event listener; Day-3 Amoy.
+
+[2026-09-03] FULL-STACK REAL-CHAIN E2E PASSED (P1 / track/chain) — DAY-2 CHECKPOINT
+  - Stood up Postgres (embedded-postgres, no Docker needed) + anvil, migrated +
+    seeded, booted backend with SETTLEMENT_MODE=real, and drove the real REST API:
+    login -> POST /payments -> confirm -> COMPLETED with REAL fund/release tx
+    hashes; on-chain escrow Released; payee MockUSDC = amount-fee (EUR 500 ->
+    496.25 USDC). Harness: contracts/script/e2e-real-chain.ts.
+  - BUGFIX (in real-settlement, no P2 files touched): the seed stores
+    User.walletKey as random bytes UNRELATED to User.walletAddress. Real
+    settlement now derives every on-chain address from walletKey (payer signer,
+    payee, credential, mint, gas). walletAddress is display-only.
+  - FLAG for P2 (optional, non-blocking): for a fully faithful demo seed
+    walletAddress = privateKeyToAccount(walletKey).address. Settlement works
+    without this.
+  - Core P1 settlement path COMPLETE + proven. Remaining are nice-to-haves:
+    event listener (fire-and-confirm) + Day-3 Polygon Amoy.

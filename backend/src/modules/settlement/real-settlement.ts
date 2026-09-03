@@ -9,6 +9,7 @@
  * only adapts it to the port and resolves the payer's demo key from the DB.
  */
 import { keccak256, parseEther, toBytes, type Address, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { ensureDeployed } from "@gigbridge/contracts";
 import { createChainOps, type ChainOps } from "@gigbridge/contracts/chain";
 import { prisma } from "../../lib/db.js";
@@ -27,21 +28,38 @@ function credHash(userId: string): Hex {
   return keccak256(toBytes(userId));
 }
 
+/**
+ * The demo seed stores walletKey and walletAddress as independent randoms, so
+ * the on-chain identity must be derived from the KEY (the actual signer). All
+ * chain ops use this; the stored walletAddress is display-only.
+ */
+function hexKey(k: string): Hex {
+  return (k.startsWith("0x") ? k : `0x${k}`) as Hex;
+}
+function addressOfKey(walletKey: string): Address {
+  return privateKeyToAccount(hexKey(walletKey)).address;
+}
+
 /** Build the port adapter over the chain ops. */
 export function createRealSettlement(ops: ChainOps): Settlement {
   return {
-    async fund(paymentId, payeeWallet, amountMinor, feeMinor, complianceHash): Promise<FundResult> {
+    async fund(paymentId, _payeeWallet, amountMinor, feeMinor, complianceHash): Promise<FundResult> {
       const payment = await prisma.payment.findUniqueOrThrow({
         where: { id: paymentId },
-        include: { company: true },
+        include: { company: true, freelancer: true },
       });
       const payerKey = payment.company.walletKey;
+      const payeeKey = payment.freelancer.walletKey;
       if (!payerKey) throw new Error(`real-settlement: payer ${payment.companyId} has no demo wallet key`);
+      if (!payeeKey) throw new Error(`real-settlement: payee ${payment.freelancerId} has no demo wallet key`);
+      // on-chain payee is the key-derived address (see addressOfKey note), not the
+      // display walletAddress the orchestrator passes.
+      const payee = addressOfKey(payeeKey);
 
       const escrowId = ops.escrowIdFor(paymentId);
       const amount = ops.minorToUsdc(amountMinor);
       const fee = ops.minorToUsdc(feeMinor);
-      const txHash = await ops.fund(payerKey, escrowId, payeeWallet as Address, amount, fee, complianceHash as Hex);
+      const txHash = await ops.fund(payerKey, escrowId, payee, amount, fee, complianceHash as Hex);
       return { txHash, escrowId };
     },
 
@@ -70,14 +88,14 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
   const ops = createChainOps({ addresses });
 
   const users = await prisma.user.findMany({
-    where: { walletAddress: { not: null } },
+    where: { walletKey: { not: null } },
     include: { company: true, freelancer: true },
   });
 
   for (const u of users) {
-    const wallet = u.walletAddress as Address;
     const verified = u.company?.kybStatus === "VERIFIED" || u.freelancer?.kycStatus === "VERIFIED";
-    if (!verified) continue;
+    if (!verified || !u.walletKey) continue;
+    const wallet = addressOfKey(u.walletKey);
 
     if ((await ops.ethBalance(wallet)) < GAS_FLOOR) {
       await ops.sendGas(wallet, GAS_TOPUP);
