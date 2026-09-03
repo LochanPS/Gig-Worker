@@ -21,7 +21,7 @@ export function TreasuryComposed({
       >
         <Grid />
         <SeriesBar dataKey="revenue" fill="var(--chart-1)" />
-        <Line dataKey="escrow" stroke="var(--chart-3)" strokeWidth={2} />
+        <Line dataKey="escrow" yAxisId="right" stroke="var(--chart-3)" strokeWidth={2} />
       </ComposedChart>
     </div>
   );
