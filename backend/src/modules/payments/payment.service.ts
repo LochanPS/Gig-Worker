@@ -116,7 +116,7 @@ export async function createPayment(companyId: string, input: CreatePaymentInput
     extra: { verdict: outcome.verdict },
   });
 
-  const quote = createQuote(pairOf(input.srcCurrency, input.dstCurrency), input.srcAmountMinor);
+  const quote = await createQuote(pairOf(input.srcCurrency, input.dstCurrency), input.srcAmountMinor);
   return { payment: await getPayment(payment.id, companyId), quote, decision, payeeWallet: payee.walletAddress };
 }
 
