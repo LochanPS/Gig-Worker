@@ -176,6 +176,26 @@ export async function releasePayment(paymentId: string, actorId: string) {
   return getPayment(paymentId, actorId);
 }
 
+// Admin resolves a FLAGGED payment. REJECT -> REJECTED; APPROVE clears the flag
+// and records the review so the company can confirm (confirm accepts FLAGGED too,
+// but APPROVE moves it to COMPLIANCE_CHECK to signal the queue is cleared).
+export async function adminResolveFlag(paymentId: string, action: 'APPROVE' | 'REJECT', note: string, adminId: string) {
+  const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  if (p.state !== 'FLAGGED') {
+    throw Object.assign(new Error(`Payment is not flagged (state ${p.state})`), { statusCode: 409 });
+  }
+  await prisma.complianceDecision.updateMany({
+    where: { paymentId },
+    data: { reviewedBy: adminId, reviewNote: note },
+  });
+  if (action === 'REJECT') {
+    await transition(paymentId, 'REJECTED', { actor: adminId, extra: { reviewNote: note } });
+  } else {
+    await transition(paymentId, 'COMPLIANCE_CHECK', { actor: adminId, timelineKey: 'COMPLIANCE_APPROVED', extra: { reviewNote: note, resolved: true } });
+  }
+  return getPayment(paymentId, adminId);
+}
+
 export async function refundPayment(paymentId: string, actorId: string) {
   const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const refunded = await getSettlement().refund(p.escrowId ?? '0x');

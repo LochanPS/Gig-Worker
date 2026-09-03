@@ -6,7 +6,7 @@ import type { PaymentState } from '@gigbridge/shared';
 const TRANSITIONS: Record<PaymentState, PaymentState[]> = {
   DRAFT: ['COMPLIANCE_CHECK'],
   COMPLIANCE_CHECK: ['RATE_LOCKED', 'FLAGGED', 'REJECTED'],
-  FLAGGED: ['RATE_LOCKED', 'REJECTED'], // admin resolves the flag
+  FLAGGED: ['RATE_LOCKED', 'COMPLIANCE_CHECK', 'REJECTED'], // admin resolves the flag
   REJECTED: [],
   RATE_LOCKED: ['FUNDED', 'EXPIRED'],
   FUNDED: ['SETTLING', 'REFUNDED'],

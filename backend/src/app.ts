@@ -8,9 +8,13 @@ import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { paymentRoutes } from './modules/payments/payment.routes.js';
+import { registerComplianceEngine } from './modules/compliance/engine.js';
+import { complianceRoutes } from './modules/compliance/compliance.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
+
+  registerComplianceEngine();
 
   await app.register(cors, { origin: true });
   await app.register(jwt, { secret: env.JWT_SECRET });
@@ -30,7 +34,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     async (api) => {
       await api.register(authRoutes);
       await api.register(paymentRoutes);
-      // TODO(P2): compliance/admin, invoices, credentials
+      await api.register(complianceRoutes);
+      // TODO(P2): invoices, credentials, agent (step 6), anomaly alerts (step 7)
     },
     { prefix: '/api/v1' },
   );
