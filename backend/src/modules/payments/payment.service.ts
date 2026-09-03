@@ -56,7 +56,7 @@ async function transition(
     type: 'payment.state',
     paymentId,
     state: to,
-    timeline: updated.timeline.map((t) => ({
+    timeline: updated.timeline.map((t: any) => ({
       key: t.key,
       label: t.label,
       state: t.state as PaymentState | null,
