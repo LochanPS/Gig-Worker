@@ -113,12 +113,18 @@ export async function createPayment(companyId: string, input: CreatePaymentInput
   // Raise durable fraud/anomaly alerts (velocity/structuring/outlier/sanctions).
   await raiseAlertsFromRules(payment.id, outcome.ruleResults);
 
-  const to: PaymentState = outcome.verdict === 'APPROVE' ? 'COMPLIANCE_CHECK' : outcome.verdict === 'FLAG' ? 'FLAGGED' : 'REJECTED';
-  await transition(payment.id, to, {
+  // Always enter COMPLIANCE_CHECK first, then branch to FLAGGED/REJECTED so every
+  // transition is legal (DRAFT only leads to COMPLIANCE_CHECK).
+  await transition(payment.id, 'COMPLIANCE_CHECK', {
     actor: 'agent',
-    timelineKey: to === 'COMPLIANCE_CHECK' ? 'COMPLIANCE_APPROVED' : undefined,
+    timelineKey: outcome.verdict === 'APPROVE' ? 'COMPLIANCE_APPROVED' : undefined,
     extra: { verdict: outcome.verdict },
   });
+  if (outcome.verdict === 'FLAG') {
+    await transition(payment.id, 'FLAGGED', { actor: 'agent', extra: { verdict: outcome.verdict } });
+  } else if (outcome.verdict === 'REJECT') {
+    await transition(payment.id, 'REJECTED', { actor: 'agent', extra: { verdict: outcome.verdict } });
+  }
 
   const quote = await createQuote(pairOf(input.srcCurrency, input.dstCurrency), input.srcAmountMinor);
   return { payment: await getPayment(payment.id, companyId), quote, decision, payeeWallet: payee.walletAddress };

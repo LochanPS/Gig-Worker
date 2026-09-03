@@ -127,11 +127,33 @@ Day 3 (nice-to-have): deploy to Polygon Amoy; expose explorer links.
 [ ] No PII on-chain: only hashes in IdentityRegistry/AuditAnchor/EscrowVault.
 
 --------------------------------------------------------------------------------
-7. CURRENT STATUS (as of backend step 7)
+7. SEED DATA THAT TOUCHES THE CHAIN (as of backend step 8)
 --------------------------------------------------------------------------------
-Backend side of the seam is DONE and exercised end-to-end via simulatedSettlement:
-fund/release/refund/anchor are all called at the right state transitions, escrowId
-and txHash are persisted and broadcast over websocket, and the compliance decision
-hash is anchored. P1 implementing §3 + §4 is the only remaining work to make the
-settlement real. Nothing on the backend side needs to change.
+The demo seed (backend/src/scripts/seed.ts) creates state P1's contracts mirror:
+- Every verified user gets a demo wallet address + (DEMO ONLY) private key in the
+  DB. When real settlement lands, these are the addresses the faucet mints MockUSDC
+  to and that EscrowVault pays out to. Admin has no wallet.
+- Every verified user gets a Credential row with a keccak256(userId) hash and an
+  anchorTxHash placeholder. The real IdentityRegistry.setCredential(address, hash,
+  expiry) should be called with THIS hash so isVerified() gates match the DB.
+- ~43 historical COMPLETED payments carry placeholder escrowId/txHashFund/
+  txHashRelease. These are history only — the real chain does not need to backfill
+  them; only NEW payments created during the demo go through real settlement.
+- Seeded actors: novatek@ / chennai@ (companies), priya@ / alex@ (verified
+  freelancers), uma@ (KYC pending), sanctioned@ = "SanctionedCo" (OFAC hit),
+  admin@. All password demo1234.
+
+When wiring real settlement, mint MockUSDC to the seeded company wallets at boot
+(or in a faucet step) and call setCredential for each seeded credential so the
+verified-party gate in EscrowVault.fund() passes for the demo actors.
+
+--------------------------------------------------------------------------------
+8. CURRENT STATUS (as of backend step 8)
+--------------------------------------------------------------------------------
+Backend side of the seam is DONE and now proven end-to-end against a real Postgres:
+login -> quote -> create payment -> compliance (APPROVE/FLAG/REJECT) -> confirm ->
+fund -> settle -> COMPLETED, with escrowId + fund/release tx hashes persisted and
+the decision hash anchored — all via simulatedSettlement. Admin queue and live
+anomaly alerts verified. P1 implementing §3 + §4 (and §7 boot steps) is the only
+remaining work to make settlement real. Nothing on the backend side needs to change.
 ================================================================================
