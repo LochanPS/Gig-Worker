@@ -1,0 +1,282 @@
+================================================================================
+PRODUCT REQUIREMENTS DOCUMENT (PRD)
+PROJECT: GIGBRIDGE — AUTONOMOUS CROSS-BORDER FREELANCER PAYMENT GATEWAY
+VERSION: 1.0 | STATUS: Hackathon build (3 people, 3 days) with business runway
+================================================================================
+
+--------------------------------------------------------------------------------
+1. ONE-LINE SUMMARY
+--------------------------------------------------------------------------------
+GigBridge is an autonomous, AI-driven cross-border payment gateway that lets a
+company anywhere in the world pay a freelancer anywhere else in the world
+directly — with automated identity verification, jurisdiction-aware regulatory
+compliance, real-time currency conversion, and blockchain-based settlement —
+in minutes instead of 3-5 business days, and at a fraction of the 8-10% fees
+charged by traditional intermediaries like PayPal or Western Union.
+
+--------------------------------------------------------------------------------
+2. PROBLEM STATEMENT
+--------------------------------------------------------------------------------
+2.1 The situation
+Freelancers across the globe take on tasks from companies in other countries.
+The company-freelancer relationship already exists; we are NOT building a
+marketplace to connect them. The friction begins at the moment of payment.
+
+2.2 The pain
+When a German company pays an Indian freelancer:
+  a) The payment passes through payment agencies, correspondent banks, and
+     currency-exchange middlemen.
+  b) These intermediaries take 8-10% of the payment in fees — devastating for
+     small gig payments where the absolute amounts are already low.
+  c) Verification, compliance clearance, and settlement take 3-5 business days.
+  d) Exchange rates fluctuate daily; the freelancer bears rate risk and often
+     receives less than expected.
+  e) Both sides must navigate two regulatory regimes (e.g. RBI/FEMA in India,
+     BaFin/ECB/GDPR in the EU, FinCEN in the US) with no automation.
+
+2.3 The consequence
+Freelancers lose a large slice of small payments, wait days for money they have
+already earned, and lose motivation to take international gig work. Companies
+(especially startups relying entirely on freelancers) face unpredictable costs,
+delays, and compliance uncertainty.
+
+2.4 The problem in one sentence
+How can an autonomous system facilitate compliant, low-cost, near-instant,
+direct cross-border payments between companies and freelancers while
+dynamically handling exchange rates and regulations of both countries?
+
+--------------------------------------------------------------------------------
+3. WHO WE ARE SOLVING FOR (USERS AND PERSONAS)
+--------------------------------------------------------------------------------
+3.1 Persona A — The Freelancer ("Priya", Bengaluru, India)
+  - Takes small-to-medium gigs ($50 - $5,000) from foreign companies.
+  - Pain: loses 8-10% to intermediaries, waits 3-5 days, re-does KYC for
+    every platform, gets poor FX rates.
+  - Wants: full payment, fast, in INR, in her bank account, with a clean
+    record for her own tax filing (FIRC-equivalent proof of foreign income).
+
+3.2 Persona B — The Company ("Novatek GmbH", Berlin, Germany)
+  - A startup with no full-time staff, running entirely on global freelancers.
+  - Pain: every payout is a manual banking chore; compliance is a black box;
+    fees are unpredictable; finance has no dashboard of freelancer payouts.
+  - Wants: one-click payout after approving work, guaranteed compliance in
+    both jurisdictions, batch payouts, invoices/receipts auto-generated.
+
+3.3 Persona C — The Platform Operator (us — GigBridge admin/ops)
+  - Runs the gateway as a business.
+  - Needs: monitoring of all transactions, compliance-flag review queue,
+    liquidity/treasury view, fraud alerts, revenue dashboard.
+
+3.4 Why they would pay for this
+  - Freelancer: keeps ~7-9% more of every payment and gets it 100x faster.
+  - Company: predictable flat low fee, automated compliance paperwork,
+    one dashboard for all global payouts.
+  - Operator: earns a thin transparent fee (0.5-1% or flat fee) at volume —
+    honest economics vs. the hidden FX-spread model of incumbents.
+
+--------------------------------------------------------------------------------
+4. THE SOLUTION
+--------------------------------------------------------------------------------
+4.1 Concept
+An "Autonomous Cross-Border Financial Agent" that sits between payer and payee
+and does — automatically, in seconds — everything the 3-5 day intermediary
+chain does manually:
+
+  Company initiates payment
+    -> Agent verifies both parties (KYC for freelancer, KYB for company,
+       verified once and reused via decentralized identity credentials)
+    -> Agent runs a jurisdiction-aware compliance rule engine on BOTH the
+       sender's and receiver's country regulations (limits, purpose codes,
+       sanctions screening, tax notes)
+    -> Agent locks a real-time FX rate with a validity window
+    -> Funds move through a blockchain settlement layer (stablecoin rail,
+       e.g. EUR -> USDC -> INR) via an escrow smart contract
+    -> Payout lands with the freelancer (wallet in demo; bank off-ramp
+       partner in production), with a full audit trail and auto-generated
+       compliance documents for both sides.
+
+4.2 What makes it different from PayPal / Western Union / Wise
+  - Autonomy: an AI agent makes compliance determinations and orchestrates the
+    pipeline end-to-end; humans only review flagged edge cases.
+  - Verify-once identity: reusable verifiable credentials mean the 3-5 day
+    "clarification" delay happens once per user, not once per payment.
+  - Transparent pricing: flat low fee + mid-market FX rate shown up front;
+    no hidden spread.
+  - Blockchain settlement: minutes, not days; immutable audit trail satisfies
+    both regulators and auditors.
+  - Two-way by design: EU->India, India->EU, US->India, India->US, etc.
+
+4.3 Explicit non-goals (hackathon scope)
+  - Not a freelancer marketplace (no job discovery/matching).
+  - Not a real money-transmitter license holder (production requires licensed
+    partners; demo simulates the fiat edges).
+  - Not global coverage on day one: demo corridors are EUR<->INR and USD<->INR.
+
+--------------------------------------------------------------------------------
+5. FUNCTIONAL REQUIREMENTS
+--------------------------------------------------------------------------------
+FR-1  Onboarding & Identity
+  FR-1.1  Freelancer sign-up with KYC flow (document upload simulated;
+          verification status machine: pending -> verified -> rejected).
+  FR-1.2  Company sign-up with KYB flow (registration number, country,
+          authorized signatory).
+  FR-1.3  On successful verification, issue a Verifiable Credential (VC)
+          bound to a DID; store hash on-chain, PII off-chain (GDPR).
+  FR-1.4  Credential reuse: subsequent payments skip re-verification;
+          credentials carry expiry and revocation status.
+
+FR-2  Payment Lifecycle
+  FR-2.1  Company creates a payout: payee, amount, source currency, target
+          currency, purpose (e.g. "software services"), optional invoice ref.
+  FR-2.2  Escrow option: company can fund escrow at gig start; release on
+          work approval.
+  FR-2.3  Payment states: DRAFT -> COMPLIANCE_CHECK -> RATE_LOCKED ->
+          FUNDED -> SETTLING -> COMPLETED (or FLAGGED / REJECTED / REFUNDED).
+  FR-2.4  Freelancer can also raise an invoice/payment request that the
+          company approves with one click.
+  FR-2.5  Batch payouts (company pays N freelancers in one action).
+
+FR-3  Autonomous Compliance Agent
+  FR-3.1  Rule engine evaluates every payment against BOTH jurisdictions:
+          - India: RBI/FEMA purpose codes, LRS-style limits, PAN presence,
+            export-of-services classification, TDS note.
+          - EU: AMLD thresholds, GDPR data handling, sanctions lists.
+          - US: OFAC screening, FinCEN thresholds.
+  FR-3.2  Sanctions/watchlist screening of both parties (mock list in demo).
+  FR-3.3  Decision output: APPROVE / FLAG_FOR_REVIEW / REJECT, with a
+          human-readable reasoning trace (the agent explains itself).
+  FR-3.4  Flagged payments enter the admin review queue; admin can approve
+          with justification or reject; everything is logged.
+  FR-3.5  LLM-powered "compliance explainer": for any payment, the agent
+          produces a plain-English summary of which rules applied and why
+          the decision was made (demo wow-factor + genuine utility).
+  FR-3.6  Anomaly detection: velocity checks (too many payments/day),
+          amount outliers vs. payee history, structuring detection
+          (splitting to dodge thresholds).
+
+FR-4  FX Engine
+  FR-4.1  Pull real-time mid-market rates (live API with cached fallback).
+  FR-4.2  Rate lock at initiation with a 10-minute validity window; if
+          settlement exceeds window, re-quote and require re-confirm.
+  FR-4.3  Show full fee breakdown before confirmation: mid-market rate,
+          platform fee, network/gas estimate, exact amount payee receives.
+  FR-4.4  Historic rate chart per corridor on the dashboards.
+
+FR-5  Settlement Layer
+  FR-5.1  Escrow smart contract: fund, release-on-approval, refund,
+          dispute-freeze. Deployed on an EVM testnet (local Anvil chain for
+          the live demo; Polygon Amoy/Sepolia as public proof).
+  FR-5.2  Stablecoin leg: mock USDC (own ERC-20 for demo) as the transfer
+          medium; fiat edges simulated by on-ramp/off-ramp mock services.
+  FR-5.3  Every settlement emits events; the UI shows a live on-chain
+          transaction timeline with tx hashes and block confirmations.
+  FR-5.4  Immutable audit log: compliance decision hash + payment hash
+          anchored on-chain.
+
+FR-6  Dashboards (three, matching the three personas)
+  FR-6.1  COMPANY DASHBOARD
+          - Overview: total paid, pending, in-escrow, fees saved vs. PayPal.
+          - "New Payout" wizard (payee -> amount -> live quote -> compliance
+            pre-check -> confirm) — the demo centerpiece.
+          - Payout table with state chips and drill-down timeline.
+          - Freelancer roster with verification badges.
+          - Escrow management, batch payout, invoices inbox.
+  FR-6.2  FREELANCER DASHBOARD
+          - Balance and incoming payments with live status timeline
+            (each stage ticks off in real time during the demo).
+          - Earnings history, FX rate at settlement, fee breakdown,
+            "you kept 99.X%" banner.
+          - Raise invoice, manage payout preferences (hold USD vs.
+            auto-convert INR), verification/credential status card.
+  FR-6.3  ADMIN / OPERATOR DASHBOARD
+          - Live transaction monitor across the whole platform.
+          - Compliance review queue with the agent's reasoning per case.
+          - Fraud/anomaly alerts, sanctions-hit review.
+          - Corridor liquidity + treasury view, revenue dashboard.
+          - Rule-engine editor view (list of active rules per country).
+
+FR-7  Notifications & Documents
+  FR-7.1  In-app + email-style notifications on every state change.
+  FR-7.2  Auto-generated documents: payment receipt, fee statement,
+          foreign-inward-remittance certificate equivalent (demo PDF),
+          compliance report per transaction.
+
+--------------------------------------------------------------------------------
+6. NON-FUNCTIONAL REQUIREMENTS
+--------------------------------------------------------------------------------
+NFR-1  Demo latency: full payment lifecycle visibly completes in < 60 seconds.
+NFR-2  Compliance decisions deterministic + reproducible (rules are code;
+       LLM only explains, never decides alone).
+NFR-3  PII never on-chain; only hashes/attestations (GDPR by design).
+NFR-4  All services runnable locally with one command (docker compose) —
+       the demo must not die if the venue Wi-Fi does.
+NFR-5  Auditability: every state transition logged with actor + timestamp.
+NFR-6  Security basics: JWT auth, role-based access (company/freelancer/
+       admin), input validation, no secrets in repo.
+
+--------------------------------------------------------------------------------
+7. SUCCESS METRICS
+--------------------------------------------------------------------------------
+Hackathon:
+  - End-to-end live demo: create payout -> compliance -> rate lock -> on-chain
+    escrow -> release -> freelancer sees money, in under a minute.
+  - Judges can see the agent's reasoning trace and the on-chain tx hash.
+  - Fee comparison banner: "PayPal: $48.20 on $500. GigBridge: $3.75."
+Business:
+  - Cost per transaction < 1% vs. 8-10% incumbent.
+  - Settlement time minutes vs. 3-5 days.
+  - Verify-once: repeat payment requires zero re-verification.
+
+--------------------------------------------------------------------------------
+8. BUSINESS MODEL (POST-HACKATHON PATH)
+--------------------------------------------------------------------------------
+8.1 Revenue
+  - Flat 0.5-1% transaction fee (capped), transparently shown.
+  - Premium company plan: batch payouts, API access, accounting integrations.
+  - Float/treasury yield on escrow balances (where legally permitted).
+  - Compliance-report generation as a paid add-on for accountants.
+8.2 Go-to-market
+  - Start with the India<->EU and India<->US corridors (largest freelancer
+    flows), target startup companies paying 5-50 freelancers/month.
+8.3 Regulatory path to production
+  - Partner with licensed entities instead of becoming one first:
+    - India off-ramp: AD-1 bank / licensed PA-CB (Payment Aggregator
+      Cross-Border) partner.
+    - EU on-ramp: EMI-licensed partner (or agent-of model).
+    - Stablecoin leg via a regulated custodian (e.g. licensed VASP).
+  - Long term: obtain own PA-CB license in India, EMI in EU.
+8.4 Moat
+  - The compliance rule engine + agent reasoning corpus per corridor is the
+    accumulating asset; each new corridor added compounds coverage that
+    incumbents price at 8-10% and we price at <1%.
+
+--------------------------------------------------------------------------------
+9. DEMO CORRIDORS AND SCENARIO (WHAT THE JUDGES SEE)
+--------------------------------------------------------------------------------
+Scenario 1 (happy path): Novatek GmbH (Berlin) pays Priya (Bengaluru) EUR 500
+for a completed gig. Wizard shows live EUR/INR quote and fee breakdown;
+compliance agent approves with visible reasoning; escrow funds on-chain;
+release; Priya's dashboard timeline completes; receipt PDF generated.
+Scenario 2 (compliance catch): A payment to a sanctioned mock entity gets
+REJECTED; a payment above threshold without purpose code gets FLAGGED and
+appears in the admin queue with the agent's explanation; admin resolves it.
+Scenario 3 (reverse direction): Indian company pays a US freelancer USD 1,200 —
+proving two-way, multi-jurisdiction capability.
+Scenario 4 (fraud): rapid-fire split payments trigger the structuring alarm
+on the admin dashboard.
+
+--------------------------------------------------------------------------------
+10. OPEN QUESTIONS / ASSUMPTIONS
+--------------------------------------------------------------------------------
+A-1  Fiat edges (bank in/out) are simulated in the demo; stated honestly as
+     "licensed partner integration" in the pitch.
+A-2  KYC document verification is mocked (instant verify) but the state
+     machine and credential issuance are real.
+A-3  Regulatory rules implemented are a representative, defensible subset of
+     RBI/FEMA, EU AMLD/GDPR, US OFAC — demonstrating the architecture, not
+     claiming legal completeness.
+A-4  Blockchain runs on a local/test network; zero real-money risk.
+
+================================================================================
+END OF PRD
+================================================================================

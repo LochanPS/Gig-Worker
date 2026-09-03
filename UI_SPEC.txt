@@ -1,0 +1,118 @@
+================================================================================
+UI SPECIFICATION — GIGBRIDGE (three dashboards)
+Companion to PRD.txt section FR-6 and TRD.txt section 5.
+================================================================================
+
+--------------------------------------------------------------------------------
+1. DESIGN LANGUAGE
+--------------------------------------------------------------------------------
+  - Fintech-clean: background #0B1220 (dark navy) with #101a2e cards, accent
+    teal #2DD4BF for success/money-in, amber #F59E0B for flags, red #EF4444
+    for blocks, muted slate text. Light mode optional (cut first).
+  - Typography: Inter for UI, JetBrains Mono for amounts, tx hashes, DIDs.
+  - Status chips (used everywhere): DRAFT gray, COMPLIANCE_CHECK blue pulse,
+    FLAGGED amber, REJECTED red, RATE_LOCKED indigo, FUNDED teal outline,
+    SETTLING teal pulse, COMPLETED solid teal, REFUNDED slate.
+  - Every money figure shows currency code + flag emoji; every tx hash is a
+    truncated mono link (0x1a2b...9f) opening the explorer.
+
+--------------------------------------------------------------------------------
+2. AUTH & ONBOARDING
+--------------------------------------------------------------------------------
+  /login, /register (role choice: Company | Freelancer).
+  Freelancer onboarding stepper: Profile -> Country & tax id (PAN for IN) ->
+  Document upload (mock) -> "Verifying..." (2s animation) -> Credential
+  issued screen: shows DID, credential hash, on-chain anchor tx, expiry.
+  Company onboarding: Legal name -> Reg number -> Country -> KYB verified ->
+  wallet auto-provisioned + demo USDC faucet balance shown.
+
+--------------------------------------------------------------------------------
+3. COMPANY DASHBOARD
+--------------------------------------------------------------------------------
+3.1 /company (Overview)
+  Row of 4 stat cards: Total Paid (30d), In Escrow, Fees Saved vs PayPal
+  (computed: sum * 9% - our fees), Avg Settlement Time ("47 sec" vs "3-5
+  days" ghost text). Below: payouts table (payee, amount, corridor,
+  status chip, date, -> detail) + corridor FX line chart (EUR/INR 30d).
+3.2 /company/pay (New Payout wizard — THE DEMO CENTERPIECE)
+  Step 1 Payee: searchable roster with verification badges; unverified
+         payees are selectable but show "will require verification" warning.
+  Step 2 Amount: src currency, dst currency, amount either side (bi-
+         directional calc), LIVE QUOTE CARD: mid-market rate, platform fee
+         0.75% (min $1), est. gas, exact INR the payee receives, and the
+         comparison strip: "PayPal would cost EUR 44.30 — GigBridge: 3.75".
+  Step 3 Compliance pre-check: rules evaluate live as a checklist ticking
+         (purpose code selector appears here: P0802 Software services...),
+         then AgentReasoningPanel streams the plain-English explanation.
+         Verdict banner: APPROVED (proceed) / FLAGGED (submitted to review,
+         wizard exits gracefully) / REJECTED (reason shown).
+  Step 4 Confirm: summary + rate-lock countdown ring (10:00 -> 0); confirm
+         triggers fund(); redirect to payment detail with live timeline.
+3.3 /company/payments/:id (Detail)
+  Vertical 7-step timeline: Created -> Compliance approved -> Rate locked
+  -> Escrow funded (tx hash) -> Settling -> Released (tx hash) -> Payee
+  credited. Each step: timestamp + actor + expandable detail (compliance
+  step expands to full rule results + agent trace). Right rail: documents
+  (Receipt PDF, Compliance report PDF), refund button (while FUNDED).
+3.4 /company/freelancers  Roster: name, country flag, credential badge
+  (Verified since..., expiry), total paid, invite-by-email modal.
+3.5 /company/invoices  Incoming payment requests: approve -> jumps into
+  wizard Step 2 pre-filled. Batch payout: multi-select roster -> CSV-like
+  amounts editor -> single compliance run -> single confirm.
+
+--------------------------------------------------------------------------------
+4. FREELANCER DASHBOARD
+--------------------------------------------------------------------------------
+4.1 /me (Home)
+  Hero balance card: INR balance (big mono) + held-FX sub-balances.
+  Incoming payment (if any): the same live timeline as company view but
+  receiver-framed; on COMPLETED, confetti micro-burst + banner
+  "You received Rs 45,120 — you kept 99.25% (PayPal: 90-92%)".
+  Earnings bar chart (weekly, 12w). Recent payments list.
+4.2 /me/history  Table: company, gross, fee, FX rate applied, net INR,
+  date, receipt download. Row expand: full fee breakdown.
+4.3 /me/invoices  Create request: company (dropdown of linked companies),
+  amount + currency, memo, invoice ref -> status tracker (Sent/Approved/
+  Paid, linked to payment timeline).
+4.4 /me/identity  Credential card (DID, issued, expires, anchor tx,
+  "reused for 14 payments — zero re-verification"), KYC status, wallet
+  address + copy, payout preference toggle: Auto-convert to INR | Hold USD.
+
+--------------------------------------------------------------------------------
+5. ADMIN / OPERATOR DASHBOARD
+--------------------------------------------------------------------------------
+5.1 /admin (Monitor)
+  Live feed (websocket): each payment event slides in as a row. Stat cards:
+  24h volume, revenue, active corridors, avg settlement seconds, flagged %.
+  Corridor volume donut + settlement-time histogram.
+5.2 /admin/queue  FLAG cases list -> case view: payment summary, rule hits
+  (each with legalRef and message), agent's summary + recommended action,
+  request-documents button (demo: marks requested), Approve (note
+  required) / Reject (note required). Resolution writes AuditLog + resumes
+  or refunds the payment — visible live on the other two dashboards.
+5.3 /admin/alerts  Cards by severity: SANCTIONS (red), STRUCTURING,
+  VELOCITY, OUTLIER (amber). Each shows the pattern evidence (e.g. the 3
+  payments that formed the structuring pattern) and links to payments.
+5.4 /admin/rules  Read-only registry grouped by jurisdiction (India flag /
+  EU flag / US flag / Platform), each rule: id, severity, legal reference,
+  description. Sells the "rule packs per corridor" business story.
+5.5 /admin/treasury  Escrow vault balance (on-chain read), fee revenue
+  cumulative chart, per-corridor liquidity table.
+
+--------------------------------------------------------------------------------
+6. NOTIFICATIONS
+--------------------------------------------------------------------------------
+  Toast + bell-menu list. Triggers: payment state changes (both parties),
+  invoice received/approved, flag raised/resolved, credential issued.
+
+--------------------------------------------------------------------------------
+7. DEMO CHOREOGRAPHY NOTES
+--------------------------------------------------------------------------------
+  - Present with 3 browser windows tiled: Company | Freelancer | Admin —
+    the payment visibly ripples across all three in real time.
+  - Typewriter effect on AgentReasoningPanel is deliberately paced (~15s)
+    to give the presenter narration room.
+  - demo:reset returns all three windows to pristine state in <10s.
+================================================================================
+END OF UI SPEC
+================================================================================

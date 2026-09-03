@@ -1,0 +1,260 @@
+================================================================================
+TECHNICAL REQUIREMENTS DOCUMENT (TRD)
+PROJECT: GIGBRIDGE — AUTONOMOUS CROSS-BORDER FREELANCER PAYMENT GATEWAY
+VERSION: 1.0 | COMPANION TO PRD.txt
+================================================================================
+
+--------------------------------------------------------------------------------
+1. TECHNOLOGY STACK DECISION
+--------------------------------------------------------------------------------
+1.1 The Go / go-zero question (asked and answered)
+go-zero is a Go microservice framework (RPC + API gateway codegen). It does
+NOT have built-in blockchain/payment connectivity — that impression comes from
+community examples pairing go-zero with go-ethereum. Go is a fine language for
+payment backends, but for a 3-person 3-day hackathon it costs us speed:
+smart-contract tooling, LLM-agent libraries, and rapid CRUD are all faster in
+the TypeScript/Solidity ecosystem, and one language across backend + frontend
+means any of the three builders can work on any part.
+
+DECISION: Solidity (contracts) + TypeScript everywhere else.
+  - Contracts: Solidity 0.8.x + Foundry (forge/anvil) — fastest test loop,
+    anvil gives us an instant local chain for the offline-safe demo.
+  - Backend: Node.js 20 + TypeScript + Fastify + Prisma + PostgreSQL.
+  - Chain client: viem (TypeScript) — typed contract calls, event watching.
+  - Agent/AI: Claude API (claude-sonnet-5) for compliance explanation +
+    reasoning traces; deterministic rule engine in TypeScript decides.
+  - Frontend: React 18 + Vite + TypeScript + Tailwind CSS + shadcn/ui,
+    Recharts for charts, single SPA with three role-based dashboard areas.
+  - Realtime: WebSocket (fastify-websocket) pushing payment state changes so
+    demo timelines animate live.
+  - Infra: docker-compose (postgres + anvil + backend + frontend). One
+    command up. Optional public deploy: Vercel (frontend) + Railway/Fly
+    (backend) + Polygon Amoy (contracts).
+
+1.2 Repo layout (monorepo, pnpm workspaces)
+  /contracts        Foundry project (escrow, mock USDC, registry, audit anchor)
+  /backend          Fastify API + agent + rule engine + workers
+  /frontend         React SPA (company / freelancer / admin dashboards)
+  /shared           TypeScript types + zod schemas shared FE/BE
+  /docs             these text documents
+  /infra            docker-compose.yml, seed scripts, demo-reset script
+
+--------------------------------------------------------------------------------
+2. SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+  [React SPA: Company | Freelancer | Admin dashboards]
+        |  REST + WebSocket
+  [Fastify API Gateway]  -- JWT auth, RBAC, zod validation
+        |
+  +-----+---------------------------------------------------+
+  | Identity Service   : KYC/KYB state machine, DID + VC     |
+  | Payment Orchestrator: lifecycle state machine (below)    |
+  | Compliance Engine  : deterministic rules, both countries |
+  | Agent Service      : LLM reasoning/explanation, anomaly  |
+  | FX Service         : live rates, lock, quote, history    |
+  | Settlement Service : viem -> contracts, event listener   |
+  | Notification Svc   : websocket push + stored notifs      |
+  | Document Svc       : PDF receipts / compliance reports   |
+  +-----+---------------------------------------------------+
+        |                          |
+  [PostgreSQL (Prisma)]      [EVM chain (anvil local / Amoy public)]
+                              - MockUSDC.sol
+                              - EscrowVault.sol
+                              - IdentityRegistry.sol
+                              - AuditAnchor.sol
+
+All "services" are modules inside one Fastify process (modular monolith) —
+microservices theater is a hackathon killer. Boundaries are clean folders so
+the pitch can honestly say "service-oriented, extractable".
+
+--------------------------------------------------------------------------------
+3. SMART CONTRACTS (Solidity, Foundry)
+--------------------------------------------------------------------------------
+3.1 MockUSDC.sol — ERC-20, 6 decimals, faucet mint for demo funding.
+3.2 IdentityRegistry.sol
+  - mapping(address => bytes32 credentialHash), expiry, revoked flag.
+  - Only backend (owner role) writes. NO PII on-chain, only the hash of the
+    off-chain verifiable credential (GDPR requirement NFR-3).
+  - isVerified(address) view used by EscrowVault as a gate.
+3.3 EscrowVault.sol — the core contract
+  struct Payment { id, payer, payee, token, amount, feeAmount,
+                   complianceHash, state, createdAt, releasedAt }
+  states: None -> Funded -> Released | Refunded | Frozen
+  functions:
+    fund(paymentId, payee, amount, complianceHash)  [payer; requires both
+         parties verified in IdentityRegistry; pulls tokens via approve]
+    release(paymentId)      [payer or platform after work approval;
+                             transfers amount-fee to payee, fee to treasury]
+    refund(paymentId)       [payer, only before release, after timeout OR
+                             platform on rejected compliance]
+    freeze/unfreeze(paymentId) [platform role, dispute handling]
+  events: PaymentFunded, PaymentReleased, PaymentRefunded, PaymentFrozen —
+  backend event listener drives UI timeline from these.
+3.4 AuditAnchor.sol — anchor(bytes32 decisionHash): stores hash of every
+  compliance decision JSON; makes the audit trail tamper-evident.
+3.5 Testing: forge tests for every state transition + access control +
+  reentrancy guard (OpenZeppelin ReentrancyGuard, Ownable/AccessControl).
+
+--------------------------------------------------------------------------------
+4. BACKEND DESIGN
+--------------------------------------------------------------------------------
+4.1 Data model (Prisma, key tables)
+  User(id, role[COMPANY|FREELANCER|ADMIN], email, passwordHash, country,
+       walletAddress, createdAt)
+  CompanyProfile(userId, legalName, regNumber, country, kybStatus)
+  FreelancerProfile(userId, fullName, country, panOrTaxId, kycStatus,
+       payoutPreference[AUTO_CONVERT|HOLD])
+  Credential(id, userId, did, credentialJson, hash, issuedAt, expiresAt,
+       revoked)  -- hash mirrored to IdentityRegistry
+  Payment(id, companyId, freelancerId, srcCurrency, dstCurrency, srcAmount,
+       dstAmount, feeAmount, fxRateId, purposeCode, invoiceRef, state,
+       complianceDecisionId, escrowPaymentId(bytes32), txHashFund,
+       txHashRelease, timestamps...)
+  FxRate(id, pair, midRate, lockedRate, lockedUntil, source, fetchedAt)
+  ComplianceDecision(id, paymentId, verdict[APPROVE|FLAG|REJECT],
+       ruleResultsJson, agentExplanation, anchorTxHash, reviewedBy,
+       reviewNote)
+  Alert(id, type[VELOCITY|STRUCTURING|OUTLIER|SANCTIONS], paymentId,
+       severity, detailsJson, resolved)
+  Notification, Invoice, AuditLog(actor, action, entity, beforeJson,
+       afterJson, at)
+
+4.2 Payment state machine (single source of truth, enforced in orchestrator)
+  DRAFT -> COMPLIANCE_CHECK -> (REJECTED | FLAGGED -> [admin] -> APPROVED?)
+        -> RATE_LOCKED -> FUNDED(on-chain) -> SETTLING -> COMPLETED
+  side paths: REFUNDED (from FUNDED), EXPIRED (rate lock timeout).
+  Every transition: persisted, audit-logged, websocket-broadcast.
+
+4.3 API surface (REST, /api/v1)
+  auth:      POST /auth/register, /auth/login, GET /auth/me
+  identity:  POST /kyc/submit, POST /kyb/submit, GET /credentials/me,
+             POST /admin/verify/:userId (issues VC + on-chain hash)
+  payments:  POST /payments (create+quote), POST /payments/:id/confirm,
+             POST /payments/:id/release, POST /payments/:id/refund,
+             GET /payments (role-scoped), GET /payments/:id/timeline
+  invoices:  POST /invoices, POST /invoices/:id/approve
+  fx:        GET /fx/quote?pair=EURINR&amount=500, GET /fx/history?pair=
+  admin:     GET /admin/queue, POST /admin/queue/:id/resolve,
+             GET /admin/alerts, GET /admin/metrics, GET /admin/rules
+  docs:      GET /payments/:id/receipt.pdf, /payments/:id/compliance.pdf
+  ws:        /ws (auth'd; events: payment.state, alert.new, notif.new)
+
+4.4 FX service
+  - Source: exchangerate-api / frankfurter.app (free, no key) with a local
+    JSON fallback snapshot so the demo works offline.
+  - Quote = mid rate; fee computed separately (0.75% flat, min $1) — the
+    "no hidden spread" claim is enforced by construction.
+  - Lock: persist lockedRate + lockedUntil = now+10min; orchestrator checks
+    validity at confirm time.
+
+4.5 Compliance engine (deterministic core)
+  Rule = { id, jurisdiction, direction[IN|OUT], predicate(payment, ctx),
+           severity[BLOCK|FLAG|INFO], legalRef, message }
+  Implemented rule set (representative, honestly-scoped):
+    IN-RBI-001  Purpose code required for inward remittance > USD 0 (FEMA).
+    IN-RBI-002  Freelancer PAN required for payments > INR 50,000 equiv.
+    IN-RBI-003  Export-of-services classification note (P0802 software).
+    IN-LRS-001  Outward from India: LRS annual cap USD 250,000/entity check.
+    EU-AML-001  Enhanced due diligence flag for > EUR 10,000 single payment.
+    EU-GDPR-001 Assert no PII fields present in on-chain payload (structural).
+    US-OFAC-001 Sanctions list screen (mock SDN list) on both parties -> BLOCK.
+    GB-VEL-001  > 5 payments same pair within 24h -> FLAG (velocity).
+    GB-STR-001  >= 3 payments same pair each within 10% under a threshold in
+                72h -> FLAG (structuring).
+    GB-OUT-001  Amount > 5x payee's trailing average -> FLAG (outlier).
+  Engine returns verdict + per-rule results; decision JSON is hashed and
+  anchored via AuditAnchor.sol.
+
+4.6 Agent service (LLM layer — explains and drafts, never solely decides)
+  - Input: payment context + rule results. Output: plain-English reasoning
+    trace shown in dashboards ("This EUR 500 payment from a German company
+    to a verified Indian freelancer for software services falls under FEMA
+    purpose code P0802...").
+  - Also drafts the document requests for FLAG cases and summarizes queue
+    items for the admin.
+  - Fallback: template-based explanations if no API key/network (demo-safe).
+  - Model: claude-sonnet-5 via Anthropic SDK; temperature low; JSON mode.
+
+4.7 Settlement service
+  - viem wallet clients: platform operator key, plus demo company key and
+    faucet-funded freelancer wallets (custodial-style, generated at signup
+    for demo simplicity; pitch notes non-custodial roadmap).
+  - Flow: on confirm -> approve + fund() -> watch PaymentFunded -> state
+    FUNDED -> (auto or manual) release() -> PaymentReleased -> COMPLETED,
+    then payout-simulation marks fiat off-ramp done and credits the
+    freelancer's displayed INR balance.
+  - Event listener with reorg-safe confirmation count = 1 (anvil) / 3 (Amoy).
+
+--------------------------------------------------------------------------------
+5. FRONTEND DESIGN
+--------------------------------------------------------------------------------
+5.1 Shell: single React app, login -> role-routed layout. Left nav + topbar.
+    Design language: clean fintech (dark navy/teal, generous whitespace,
+    status chips, monospace tx hashes). Fully responsive; demo on laptop.
+5.2 COMPANY area
+  /company            Overview cards (Total Paid, In Escrow, Fees Saved,
+                      Avg Settlement Time) + payouts table + FX chart
+  /company/pay        4-step wizard: Payee -> Amount & currencies (live
+                      quote + fee breakdown + "vs PayPal" comparison) ->
+                      Compliance pre-check (agent trace renders live) ->
+                      Confirm (rate-lock countdown ring)
+  /company/payments/:id  Timeline view: 7 lifecycle steps with live ticks,
+                      tx hashes linking to explorer, documents download
+  /company/freelancers   Roster with verification badges, invite flow
+  /company/invoices      Incoming requests, one-click approve->pay
+5.3 FREELANCER area
+  /me                 Balance card (INR + held FX), incoming payment live
+                      timeline, "You kept 99.25%" banner, earnings chart
+  /me/history         All payments w/ rate + fee detail, receipt downloads
+  /me/invoices        Create invoice (company, amount, currency, memo)
+  /me/identity        KYC status, credential card (DID, issued, expiry),
+                      wallet address, payout preference toggle
+5.4 ADMIN area
+  /admin              Live transaction monitor (websocket feed), volume +
+                      revenue + corridor metrics, settlement-time histogram
+  /admin/queue        FLAG queue: case detail = rule hits + agent reasoning
+                      + approve/reject with note
+  /admin/alerts       Fraud alerts (velocity/structuring/outlier/sanctions)
+  /admin/rules        Read-only rule registry grouped by jurisdiction
+  /admin/treasury     Escrow balances per corridor, fee revenue
+5.5 Shared components: PaymentTimeline, FeeBreakdown, QuoteCard,
+    StatusChip, AgentReasoningPanel (typewriter effect for demo),
+    TxHashLink, CredentialCard.
+
+--------------------------------------------------------------------------------
+6. SECURITY & COMPLIANCE-BY-DESIGN
+--------------------------------------------------------------------------------
+  - JWT (short-lived) + role guards on every route; zod validation on all IO.
+  - Secrets via .env (gitignored); anvil demo keys clearly marked DEMO ONLY.
+  - PII partitioning: DB only; chain gets hashes. Credential JSON encrypted
+    at rest (AES-256-GCM, key in env).
+  - Contract safety: OZ AccessControl + ReentrancyGuard, checks-effects-
+    interactions, forge tests incl. failure paths.
+  - Full AuditLog on every admin action and state transition.
+
+--------------------------------------------------------------------------------
+7. DEMO OPS
+--------------------------------------------------------------------------------
+  - `docker compose up` boots postgres, anvil, backend (auto-migrates,
+    auto-deploys contracts, seeds demo data), frontend.
+  - Seed: Novatek GmbH (DE), Chennai Softworks (IN), Priya (IN, verified),
+    Alex (US, verified), Unverified Uma (IN, pending), SanctionedCo (mock
+    SDN hit), 30 days of historical payments + FX history for charts.
+  - `pnpm demo:reset` restores the pristine demo state between runs.
+  - Offline mode: FX fallback snapshot + template agent explanations mean
+    ZERO hard network dependencies during the pitch.
+
+--------------------------------------------------------------------------------
+8. PRODUCTION EVOLUTION NOTES (for the business story)
+--------------------------------------------------------------------------------
+  - Swap MockUSDC -> real USDC on Polygon PoS; add licensed on/off-ramp
+    partners (EU EMI, India AD-1/PA-CB) behind the existing Settlement
+    Service interface (it is already an interface for exactly this reason).
+  - Swap mock KYC -> Onfido/HyperVerge/Signzy API behind Identity Service.
+  - Extract services to independent deployables when volume demands.
+  - Add per-corridor rule packs as data (the engine already treats rules as
+    a registry keyed by jurisdiction).
+
+================================================================================
+END OF TRD
+================================================================================

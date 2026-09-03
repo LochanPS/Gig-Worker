@@ -1,0 +1,142 @@
+================================================================================
+3-PERSON / 3-DAY BUILD ROADMAP — GIGBRIDGE
+Parallel build plan for three simultaneous Claude Code (cloud) sessions,
+each owning one track and pushing continuously to GitHub.
+================================================================================
+
+--------------------------------------------------------------------------------
+0. TRACK OWNERSHIP (one cloud account = one track = one branch)
+--------------------------------------------------------------------------------
+  P1 — CHAIN & SETTLEMENT   branch: track/chain
+       Foundry contracts, MockUSDC, EscrowVault, IdentityRegistry,
+       AuditAnchor, viem settlement service, event listener, wallets.
+  P2 — BACKEND & AGENT      branch: track/backend
+       Fastify API, Prisma schema, auth/RBAC, payment orchestrator state
+       machine, FX service, compliance rule engine, LLM agent service,
+       websocket, notifications, PDFs, seed data.
+  P3 — FRONTEND & DEMO      branch: track/frontend
+       React SPA, all three dashboards, shared components, charts,
+       demo polish, pitch assets, demo script.
+
+  Integration discipline:
+  - /shared package (types + zod schemas + API contract) is written FIRST
+    on Day 1 morning by P2 and is the interface treaty; changes to it
+    require a note in INTEGRATION_LOG.txt.
+  - Merge to main at every sync point (see below). Small PRs, no long-lived
+    divergence. Mock the other tracks until real pieces land:
+    P3 codes against a mock API server generated from /shared schemas;
+    P2 codes against contract ABIs committed by P1 at Day 1 noon.
+  - Sync points: end of Day 1 AM, end of each day, Day 3 noon (feature
+    freeze), Day 3 evening (demo lock).
+
+--------------------------------------------------------------------------------
+DAY 1 — FOUNDATIONS (goal: skeleton of everything, walking end-to-end mock)
+--------------------------------------------------------------------------------
+Morning
+  ALL: repo scaffolding — pnpm monorepo, workspaces, lint/format, CI stub,
+       docker-compose skeleton. (P2 leads, 1 hour.)
+  P2:  /shared package: all entity types, payment states, API request/
+       response zod schemas, websocket event types.  <- INTERFACE TREATY
+  P1:  Foundry init; MockUSDC + IdentityRegistry written + tested;
+       EscrowVault skeleton (fund/release/refund) + first tests;
+       commit ABIs to /shared/abis by NOON.
+  P3:  Vite app, Tailwind + shadcn, auth pages, role-routed layout shells
+       for company/freelancer/admin; mock API server from /shared schemas.
+Afternoon
+  P1:  EscrowVault complete (freeze, fees, verified-party gate, events),
+       full forge test suite green; deploy script for anvil; AuditAnchor.
+  P2:  Prisma schema + migrations; auth (register/login/JWT/RBAC);
+       payment CRUD with state machine skeleton; FX service with live API
+       + offline fallback + quote endpoint.
+  P3:  Company dashboard overview + payouts table (mock data); freelancer
+       dashboard shell; shared components: StatusChip, QuoteCard,
+       FeeBreakdown, PaymentTimeline (static).
+End-of-day sync: mock end-to-end click-through works against mock API;
+contracts tested; auth real. Merge all to main.
+
+--------------------------------------------------------------------------------
+DAY 2 — THE REAL PIPELINE (goal: real payment travels DB -> chain -> DB -> UI)
+--------------------------------------------------------------------------------
+Morning
+  P1:  Settlement service in backend repo area: viem clients, deploy-on-
+       boot for anvil, fund()/release()/refund() wrappers, event listener
+       feeding orchestrator callbacks; demo wallet generation at signup.
+  P2:  Compliance rule engine: all 10 rules from TRD 4.5 + verdict
+       aggregation + decision persistence + hash anchoring (calls P1's
+       AuditAnchor wrapper); admin queue endpoints.
+  P3:  New Payout wizard (4 steps) wired to real quote endpoint;
+       websocket client + live PaymentTimeline; freelancer incoming-
+       payment live view.
+Afternoon
+  P1+P2 pair: FULL PIPELINE INTEGRATION — confirm -> compliance ->
+       rate-lock -> fund on-chain -> event -> SETTLING -> release ->
+       COMPLETED, all transitions broadcast on websocket. This is the
+       make-or-break session; both stay on it until a real payment
+       completes end-to-end.
+  P2:  Agent service: Claude API integration, reasoning-trace generation,
+       template fallback; anomaly rules (velocity/structuring/outlier)
+       + Alert persistence.
+  P3:  Admin dashboard: live monitor, compliance queue UI with
+       AgentReasoningPanel, alerts page; invoice flows both sides.
+End-of-day sync: DEMO SCENARIO 1 (happy path) works live, for real, on
+anvil, visible across all three dashboards. Merge to main. Tag v0.2.
+
+--------------------------------------------------------------------------------
+DAY 3 — COMPLIANCE THEATER, POLISH, PITCH (goal: unbreakable demo)
+--------------------------------------------------------------------------------
+Morning
+  P1:  Public-proof deploy to Polygon Amoy (nice-to-have; local remains
+       the live-demo path); explorer links; refund/freeze paths wired to
+       admin actions; contract README.
+  P2:  Scenarios 2-4 seeded and working: sanctions REJECT, threshold FLAG
+       -> admin resolve, reverse corridor INR->USD, structuring alert.
+       PDF receipt + compliance report endpoints. Seed data + demo:reset.
+  P3:  Fee-comparison banner ("vs PayPal"), "you kept 99.X%" banner,
+       FX history charts, credential card, notification toasts, empty
+       states, loading states, typewriter effect on agent reasoning.
+NOON: FEATURE FREEZE. Full main merge. All three run the complete demo
+       script twice from `docker compose up` on a clean machine.
+Afternoon
+  ALL: bug-bash the four demo scenarios; fix only what the script touches.
+  P3:  Pitch deck (problem -> solution -> live demo -> architecture ->
+       business model -> ask), demo video recording as backup.
+  P2:  README quickstart; DEMO_SCRIPT walkthrough rehearsal timing.
+  P1:  Failure-mode drill: kill network -> offline fallbacks verified;
+       demo:reset verified 3x.
+Evening: DEMO LOCK. Tag v1.0. No commits after this except the pitch deck.
+
+--------------------------------------------------------------------------------
+RISK REGISTER & CUTS (pre-agreed, in order)
+--------------------------------------------------------------------------------
+  R1 Chain integration slips     -> Day 2 PM pairing is protected time; if
+                                    still stuck by Day 3 AM, settlement
+                                    falls back to simulated tx hashes
+                                    (UI identical), contracts shown via
+                                    forge tests instead of live calls.
+  R2 LLM API unavailable at venue-> template explanations (already built).
+  R3 Time crunch cut order:      1) Amoy public deploy  2) PDFs
+                                 3) batch payouts  4) invoices
+                                 5) FX history charts  6) escrow-at-start
+                                    (keep pay-on-approval only).
+  NEVER CUT: payout wizard, live timeline, compliance queue + reasoning,
+  fee comparison, demo reset.
+
+--------------------------------------------------------------------------------
+POST-HACKATHON 90-DAY BUSINESS ROADMAP (the "make money" path)
+--------------------------------------------------------------------------------
+  Weeks 1-2   Harden: non-custodial wallet option, real KYC vendor sandbox
+              (Signzy/HyperVerge), real USDC on Amoy -> Polygon mainnet
+              testable path, error budget + monitoring.
+  Weeks 3-6   Pilot: 3-5 friendly startups + 20 freelancers on the
+              India<->EU corridor with a licensed off-ramp partner in
+              sandbox (PA-CB partner conversations start Week 3).
+  Weeks 7-12  Monetize pilot: 0.75% fee live, company premium plan beta,
+              compliance-report add-on; measure unit economics; corridor
+              #3 (India<->US) rule pack; seed fundraise deck built on
+              pilot metrics (volume, fee savings, settlement time).
+  Milestone to call it a business: USD 100k monthly volume at >=0.5% net
+  take with < 2% flagged-payment manual-review rate.
+
+================================================================================
+END OF ROADMAP
+================================================================================

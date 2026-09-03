@@ -1,0 +1,82 @@
+================================================================================
+DEMO SCRIPT — GIGBRIDGE (target: 6 minutes live + Q&A)
+================================================================================
+
+SETUP (before judges arrive)
+  - `docker compose up` on presenter laptop; `pnpm demo:reset`.
+  - Three browser windows tiled: Company (Novatek GmbH), Freelancer (Priya),
+    Admin. All logged in. Backup demo video on desktop.
+
+MINUTE 0-1 — THE PROBLEM (talk over Company overview screen)
+  "Priya in Bengaluru finished a EUR 500 gig for Novatek in Berlin. Today,
+  paying her means PayPal or a wire: 8-10% in fees — that's 40-50 euros of
+  her money — and 3 to 5 days of waiting. We built the intermediary out of
+  the intermediary: an autonomous agent that does the verification,
+  compliance, FX and settlement in under a minute, for under 1%."
+
+MINUTE 1-3 — SCENARIO 1: HAPPY PATH
+  1. Company window: New Payout -> select Priya (point at her verification
+     badge: "verified once, credential reused forever — that's where the
+     3-5 days used to go").
+  2. Enter EUR 500 -> live quote appears. POINT AT: mid-market rate, 0.75%
+     fee, exact INR received, and the comparison strip "PayPal: ~EUR 44.
+     GigBridge: EUR 3.75."
+  3. Compliance step: rules tick live (FEMA purpose code P0802, PAN check,
+     AML threshold, sanctions screen) then the AI agent streams its
+     plain-English reasoning. "Deterministic rules decide; the AI explains —
+     auditors get both."
+  4. Confirm -> rate-lock ring -> escrow funds ON-CHAIN. Point at the tx
+     hash. Switch to Freelancer window: Priya's timeline is ticking LIVE.
+  5. Release -> COMPLETED -> Priya's balance updates, "You kept 99.25%"
+     banner. Total elapsed: ~50 seconds. Say the number out loud.
+
+MINUTE 3-4 — SCENARIO 2: THE AGENT SAYS NO
+  6. Company window: attempt payout to "SanctionedCo" -> REJECTED instantly,
+     OFAC rule cited. "The agent isn't just fast — it refuses."
+  7. Attempt EUR 12,000 payout -> FLAGGED (EU AML enhanced due diligence).
+     Switch to Admin window: case is in the queue with rule hits + the
+     agent's summary. Approve with a note -> payment resumes, visible on
+     the company window. "Humans stay in the loop exactly where regulators
+     want them."
+
+MINUTE 4-5 — SCENARIO 3+4: TWO-WAY + FRAUD
+  8. Quick cut: Chennai Softworks (India) pays Alex (US) USD 1,200 —
+     reverse corridor, LRS check visible. "Both directions, both
+     jurisdictions, by design."
+  9. Admin alerts page: pre-seeded structuring alert — three payments each
+     just under the threshold within 72h, pattern evidence shown. "It also
+     watches for people gaming it."
+
+MINUTE 5-6 — HOW + BUSINESS
+  10. One architecture slide: dashboards -> autonomous agent (identity /
+      compliance rule engine / FX / settlement) -> escrow smart contract on
+      EVM + audit anchors; PII off-chain (GDPR), hashes on-chain.
+  11. Business: "Transparent 0.75% flat vs 8-10% hidden. Production path:
+      licensed off-ramp partners (PA-CB in India, EMI in EU), real USDC
+      rail. Every new corridor is a rule pack, not a rebuild."
+  CLOSE: "Same company. Same freelancer. Same payment. 50 seconds and 99%
+      of her money — instead of 5 days and 90%."
+
+FAILURE DRILLS
+  - No internet: FX uses fallback snapshot; agent uses template
+    explanations; chain is local anvil. Nothing external is load-bearing.
+  - Anything breaks mid-demo: `pnpm demo:reset` (<10s) or play backup video.
+
+LIKELY JUDGE QUESTIONS — PREPARED ANSWERS
+  Q: Is this legal without a license?
+  A: Demo simulates fiat edges. Production model is partner-first: AD-1 /
+     PA-CB partner in India, EMI in EU; we are the technology + compliance
+     layer, the licensed partner holds the rail. Long-term we license up.
+  Q: Why blockchain at all?
+  A: Escrow without trusting us, minutes-not-days settlement, and a
+     tamper-evident audit trail both regulators can verify independently.
+  Q: What does the AI actually decide?
+  A: Nothing alone. Deterministic rules produce the verdict; the LLM
+     explains, summarizes, and drafts document requests. That's deliberate —
+     it's what makes the system auditable.
+  Q: How do you make money at 0.75%?
+  A: Volume + premium company plans + compliance-report add-ons; incumbents'
+     8-10% is mostly hidden FX spread we simply don't take.
+================================================================================
+END OF DEMO SCRIPT
+================================================================================
