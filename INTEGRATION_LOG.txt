@@ -75,3 +75,15 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
     ROOT CHANGE: pnpm-workspace.yaml gained "contracts" — run `pnpm install`.
   - Added docs/ROADMAP_SIMPLE.txt; updated CONTRACTS_AND_SETTLEMENT §6/§9.
   - NEXT (P1): backend real-settlement.ts implementing the Settlement port.
+
+[2026-09-03] Frontend scaffold (P2 acting on track/frontend — P3 had not started)
+  - React 18 + Vite + TS + react-router, design tokens per UI_SPEC §1.
+  - Typed api client (@gigbridge/shared), AuthProvider, useWs hook.
+  - Pages: Login, Company Overview + New Payout WIZARD (quote->compliance->settle),
+    Freelancer Home, Admin Monitor (queue + alerts). All against the REAL API.
+  - VERIFIED: frontend build passes; login through the Vite proxy hits the live
+    backend and returns the seeded user. Core demo path clickable.
+  - Added docs/FRONTEND_INTEGRATION.txt (the relevant doc for this path).
+    CONTRACTS_AND_SETTLEMENT.txt (P1-owned) is untouched — frontend doesn't touch it.
+  NOTE for P3: pick this up on track/frontend; §4 of FRONTEND_INTEGRATION lists
+  the remaining screens + polish.

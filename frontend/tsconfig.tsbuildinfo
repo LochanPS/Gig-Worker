@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/components/Layout.tsx","./src/components/bits.tsx","./src/lib/api.ts","./src/lib/auth.tsx","./src/lib/ws.ts","./src/pages/Login.tsx","./src/pages/admin/Monitor.tsx","./src/pages/company/NewPayout.tsx","./src/pages/company/Overview.tsx","./src/pages/freelancer/Home.tsx"],"version":"5.9.3"}
