@@ -55,8 +55,24 @@ async function main() {
   });
   const paymentId: string = created.payment.id;
   const quoteId: string = created.quote.quoteId;
-  console.log("created payment", paymentId, "state", created.payment.state, "verdict quote", quoteId);
-  assert(created.payment.state === "COMPLIANCE_CHECK", `expected APPROVE->COMPLIANCE_CHECK, got ${created.payment.state}`);
+  const state: string = created.payment.state;
+  console.log("created payment", paymentId, "state", state, "quote", quoteId);
+  assert(
+    state === "COMPLIANCE_CHECK" || state === "FLAGGED",
+    `expected COMPLIANCE_CHECK or FLAGGED, got ${state}`,
+  );
+
+  // If the anomaly rules flagged it (e.g. repeated demo payments trip velocity),
+  // resolve it through the admin queue — exercising that path too.
+  if (state === "FLAGGED") {
+    const admin = await login("admin@demo.gg");
+    await api(`/admin/queue/${paymentId}/resolve`, {
+      method: "POST",
+      token: admin.token,
+      body: { action: "APPROVE", note: "e2e auto-approve of flagged demo payment" },
+    });
+    console.log("admin approved flagged payment via /admin/queue/:id/resolve");
+  }
 
   // confirm -> real rate lock -> fund on-chain -> release -> COMPLETED
   const confirmed = await api(`/payments/${paymentId}/confirm`, {
@@ -74,18 +90,34 @@ async function main() {
   assert(/^0x[0-9a-f]{64}$/i.test(p.txHashFund), "real fund tx hash present");
   assert(/^0x[0-9a-f]{64}$/i.test(p.txHashRelease), "real release tx hash present");
 
-  // verify on-chain via the escrow record: Released + payee got amount-fee
-  const escrow = (await ops.getPayment(p.escrowId as Hex)) as { state: number; payee: Address };
-  console.log("on-chain escrow:", { state: Number(escrow.state), payee: escrow.payee });
+  // verify on-chain via the per-payment escrow record (history-independent, so
+  // it holds even when the same demo payee is reused across repeated runs).
+  const escrow = (await ops.getPayment(p.escrowId as Hex)) as {
+    state: number;
+    payee: Address;
+    amount: bigint;
+    fee: bigint;
+  };
+  const expectedAmount = BigInt(p.srcAmountMinor) * 10_000n;
+  const expectedFee = BigInt(p.feeAmountMinor) * 10_000n;
+  const expectedPayout = expectedAmount - expectedFee;
+  console.log("on-chain escrow:", {
+    state: Number(escrow.state),
+    payee: escrow.payee,
+    amount: escrow.amount.toString(),
+    fee: escrow.fee.toString(),
+  });
   assert(Number(escrow.state) === 2, "escrow marked Released on-chain (state 2)");
+  assert(escrow.amount === expectedAmount, `escrow amount ${escrow.amount}, expected ${expectedAmount}`);
+  assert(escrow.fee === expectedFee, `escrow fee ${escrow.fee}, expected ${expectedFee}`);
 
-  const expectedPayout = BigInt(p.srcAmountMinor - p.feeAmountMinor) * 10_000n;
+  // payee balance is a positive multiple of the payout (accumulates across runs)
   const payeeBal = await ops.usdcBalance(escrow.payee);
-  console.log("payee on-chain USDC:", payeeBal.toString(), "expected", expectedPayout.toString());
-  assert(payeeBal === expectedPayout, `payee balance ${payeeBal}, expected ${expectedPayout}`);
+  console.log("payee on-chain USDC:", payeeBal.toString(), "(>= one payout", expectedPayout.toString(), ")");
+  assert(payeeBal >= expectedPayout && payeeBal % expectedPayout === 0n, "payee balance is whole payouts");
 
   console.log("\n✅ FULL-STACK REAL-CHAIN E2E PASSED");
-  console.log(`   EUR 500.00 -> escrow -> release; payee +${expectedPayout} USDC base units on anvil.`);
+  console.log(`   EUR 500.00 -> escrow -> release; payee received ${expectedPayout} USDC base units this run.`);
 }
 
 main()

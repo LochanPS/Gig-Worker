@@ -152,6 +152,27 @@ export function createChainOps(opts: ChainOpsOptions = {}) {
     async getPayment(escrowId: Hex) {
       return publicClient.readContract({ address: escrow, abi: ESCROW_ABI, functionName: "getPayment", args: [escrowId] });
     },
+
+    /**
+     * Watch EscrowVault settlement events live (PaymentFunded/Released/Refunded/
+     * Frozen). Polls (anvil-friendly). Returns an unwatch function. This is the
+     * on-chain source of truth for the live tx feed (PRD FR-5.3).
+     */
+    watchEscrow(
+      onEvent: (e: { eventName: string; args: Record<string, unknown>; txHash: Hex; blockNumber: bigint | null }) => void,
+    ): () => void {
+      return publicClient.watchContractEvent({
+        address: escrow,
+        abi: ESCROW_ABI,
+        pollingInterval: 500,
+        onLogs: (logs) => {
+          for (const l of logs) {
+            const log = l as unknown as { eventName: string; args: Record<string, unknown>; transactionHash: Hex; blockNumber: bigint | null };
+            onEvent({ eventName: log.eventName, args: log.args, txHash: log.transactionHash, blockNumber: log.blockNumber });
+          }
+        },
+      });
+    },
   };
 }
 
