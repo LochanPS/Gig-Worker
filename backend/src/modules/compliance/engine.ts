@@ -8,6 +8,7 @@ import { RULES } from './rules/index.js';
 import { toResult, type EvalContext, type Party } from './rules/types.js';
 import { isSanctioned } from './rules/sanctions.js';
 import { setComplianceEngine, hashDecision, type ComplianceContext, type ComplianceOutcome } from './compliance.interface.js';
+import { explainDecision } from '../agent/agent.service.js';
 
 function aggregate(results: RuleResult[]): Verdict {
   const failed = results.filter((r) => !r.passed);
@@ -106,7 +107,21 @@ export async function evaluateCompliance(ctx: ComplianceContext): Promise<Compli
   const ec = await buildContext(ctx);
   const ruleResults = RULES.map((r) => toResult(r, ec));
   const verdict = aggregate(ruleResults);
-  const agentExplanation = templateExplanation(ec, verdict, ruleResults);
+  const fallback = templateExplanation(ec, verdict, ruleResults);
+  // Agent explains (LLM when configured, else the deterministic template).
+  const agentExplanation = await explainDecision({
+    verdict,
+    ruleResults,
+    facts: {
+      payerName: ec.payer.name,
+      payerCountry: ec.payer.country,
+      payeeName: ec.payee.name,
+      payeeCountry: ec.payee.country,
+      amount: `${ec.srcCurrency} ${(ec.srcAmountMinor / 100).toFixed(2)}`,
+      purposeCode: ec.purposeCode,
+    },
+    fallback,
+  });
   return { verdict, ruleResults, agentExplanation, decisionHash: hashDecision(verdict, ruleResults) };
 }
 
