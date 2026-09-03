@@ -1,3 +1,12 @@
-// Real backend entrypoint — implemented in P2 build steps 1-10.
-// Until then, run the mock server: `pnpm --filter ./backend mock`.
-console.log('GigBridge backend: not yet implemented. See docs/BUILD_CONTRACTS.txt.');
+// Real backend entrypoint.
+import { buildApp } from './app.js';
+import { env } from './lib/env.js';
+
+const app = await buildApp();
+app
+  .listen({ port: env.PORT, host: '0.0.0.0' })
+  .then(() => app.log.info(`GigBridge backend on :${env.PORT}`))
+  .catch((err) => {
+    app.log.error(err);
+    process.exit(1);
+  });
