@@ -1,27 +1,24 @@
-// FX service — MINIMAL version for step 3 (orchestrator needs quoting).
-// Step 4 replaces the rate source with frankfurter.app + offline fallback and
-// adds /fx/history. The quote/lock shape here is frozen (BUILD_CONTRACTS §4).
+// FX service: quoting, rate-locking, and history. Rates come from the live/fallback
+// source in rates.ts. Quote/lock shape frozen (BUILD_CONTRACTS §4).
 import { randomUUID } from 'node:crypto';
-import type { FxQuote } from '@gigbridge/shared';
+import type { FxQuote, Currency } from '@gigbridge/shared';
 import { FEE, INCUMBENT_FEE_PCT, RATE_LOCK_MINUTES } from '@gigbridge/shared';
-import { env } from '../../lib/env.js';
+import { crossRate, getRates } from './rates.js';
 
-// Placeholder static rates; step 4 makes these live.
-const STATIC_RATES: Record<string, number> = { EURINR: 90.24, USDINR: 83.1, INRUSD: 0.01203 };
-
-// In-memory quote store; a real store lands with the DB-backed FxRate in step 4.
+// Quotes are held in memory for their 10-minute validity window.
 const quotes = new Map<string, FxQuote>();
-
-export function midRate(pair: string): number {
-  return STATIC_RATES[pair] ?? 1;
-}
 
 function feeMinor(srcAmountMinor: number): number {
   return Math.max(Math.round((srcAmountMinor * FEE.BPS) / 10_000), FEE.MIN_USD_MINOR);
 }
 
-export function createQuote(pair: string, srcAmountMinor: number): FxQuote {
-  const rate = midRate(pair);
+function splitPair(pair: string): [Currency, Currency] {
+  return [pair.slice(0, 3) as Currency, pair.slice(3, 6) as Currency];
+}
+
+export async function createQuote(pair: string, srcAmountMinor: number): Promise<FxQuote> {
+  const [src, dst] = splitPair(pair);
+  const { rate } = await crossRate(src, dst);
   const fee = feeMinor(srcAmountMinor);
   const gasEstimateMinor = 40;
   const payeeReceivesMinor = Math.round((srcAmountMinor - fee - gasEstimateMinor) * rate);
@@ -48,4 +45,22 @@ export function isQuoteValid(q: FxQuote): boolean {
   return new Date(q.expiresAt).getTime() > Date.now();
 }
 
-export const fxOffline = env.FX_OFFLINE;
+// Synthetic-but-plausible daily history for the corridor charts. Anchored to the
+// current live/fallback rate so the last point matches today's quote.
+export async function rateHistory(pair: string, days: number): Promise<{ date: string; rate: number }[]> {
+  const [src, dst] = splitPair(pair);
+  const { rate } = await crossRate(src, dst);
+  const out: { date: string; rate: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const drift = Math.sin(i / 3.2) * rate * 0.01 + (Math.random() - 0.5) * rate * 0.003;
+    out.push({
+      date: new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10),
+      rate: +(rate + drift).toFixed(4),
+    });
+  }
+  return out;
+}
+
+export async function rateSource(): Promise<string> {
+  return (await getRates()).source;
+}

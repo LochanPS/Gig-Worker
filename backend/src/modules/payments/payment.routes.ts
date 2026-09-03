@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { createPaymentSchema, confirmPaymentSchema, fxQuoteQuerySchema } from '@gigbridge/shared';
 import { requireAuth, requireRole } from '../auth/auth.routes.js';
 import { addConn } from '../../lib/ws.js';
-import { createQuote } from '../fx/fx.service.js';
+import { createQuote, rateHistory } from '../fx/fx.service.js';
 import { createPayment, confirmPayment, releasePayment, refundPayment, getPayment, listPayments } from './payment.service.js';
 
 export async function paymentRoutes(app: FastifyInstance) {
@@ -11,6 +11,11 @@ export async function paymentRoutes(app: FastifyInstance) {
   app.get('/fx/quote', { preHandler: [requireAuth] }, async (req) => {
     const { pair, amount } = fxQuoteQuerySchema.parse(req.query);
     return createQuote(pair, amount);
+  });
+
+  app.get('/fx/history', { preHandler: [requireAuth] }, async (req) => {
+    const q = req.query as { pair?: string; days?: string };
+    return rateHistory(q.pair ?? 'EURINR', Math.min(Number(q.days ?? 30), 90));
   });
 
   app.post('/payments', { preHandler: [requireRole('COMPANY')] }, async (req) => {
