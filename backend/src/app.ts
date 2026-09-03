@@ -7,6 +7,7 @@ import websocket from '@fastify/websocket';
 import { ZodError } from 'zod';
 import { env } from './lib/env.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
+import { paymentRoutes } from './modules/payments/payment.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
@@ -28,7 +29,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(
     async (api) => {
       await api.register(authRoutes);
-      // TODO(P2): payments, fx, compliance/admin, invoices, credentials, ws
+      await api.register(paymentRoutes);
+      // TODO(P2): compliance/admin, invoices, credentials
     },
     { prefix: '/api/v1' },
   );
