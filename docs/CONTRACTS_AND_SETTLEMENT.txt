@@ -17,6 +17,28 @@ drives every payment through its state machine. At two points it needs the chain
                      v                         v
               Settlement.fund()         Settlement.release()
 
+  IMPORTANT (changed): fund() and release() are no longer always one pass.
+  Payment.escrowMode decides:
+    INSTANT (default)  confirm runs fund -> release -> COMPLETED in one request,
+                       exactly as before. Nothing changes for the chain layer.
+    HOLD (FR-2.2)      confirm funds the escrow and STOPS at FUNDED. The money
+                       sits on-chain until the company approves the work and
+                       calls POST /payments/:id/release, which is a separate
+                       request, minutes or days later. refund() reverses it.
+  For P1 this means the gap between fund() and release() can be arbitrarily long,
+  and a funded escrow is a normal resting state, not a transient one. Anything
+  that assumed release follows fund within one request (a held nonce, an in-memory
+  handle keyed by request, a short tx-wait timeout) must not.
+
+  Two more paths can end a payment BEFORE it ever funds:
+    RATE_LOCKED -> EXPIRED   a rate lock that lapsed before funding is swept to
+                             EXPIRED (timer + POST /admin/expire-locks). No chain
+                             call is ever made for these.
+    COMPLIANCE   -> REJECTED the AI adjudicator (agent/adjudicator.ts) triages a
+                             FLAG into AUTO_CLEAR / AUTO_REJECT / ESCALATE before
+                             a human sees it, so some flagged payments are
+                             rejected without ever reaching fund().
+
 It also anchors each compliance decision hash on-chain at create time
 (AuditAnchor). The orchestrator NEVER imports viem or contract ABIs directly —
 it talks to a single port interface (see §3). Today a SIMULATED implementation
@@ -73,6 +95,13 @@ identical.
 
 P1 deliverable: a `realSettlement: Settlement` (viem-backed) plus a call to
 `setSettlement(realSettlement)` at boot. Nothing else in the backend changes.
+
+WHO MAY TRIGGER A CHAIN CALL (added): the orchestrator's public entry points are
+authorization-gated. confirm / retry / release / refund require the PAYING COMPANY
+or an admin (assertPayer); reads require either party or an admin (assertParty).
+A payee cannot release escrow to themselves. The port itself is unauthenticated —
+it trusts its caller — so nothing outside payment.service.ts should call
+getSettlement() directly.
 
 --------------------------------------------------------------------------------
 4. HOW P1 BUILDS & HANDS OFF (independent until Day 2)
@@ -144,6 +173,17 @@ The demo seed (backend/src/scripts/seed.ts) creates state P1's contracts mirror:
 - Seeded actors: novatek@ / chennai@ (companies), priya@ / alex@ (verified
   freelancers), uma@ (KYC pending), sanctioned@ = "SanctionedCo" (OFAC hit),
   admin@. All password demo1234.
+- CHANGED: SanctionedCo is now seeded VERIFIED, so it DOES get a wallet, a
+  credential row and an on-chain setCredential at boot like any other verified
+  user. It is stopped by US-OFAC-001 at payment time, not by missing KYC. This
+  models a party added to the watchlist after onboarding — which is the reason
+  screening runs per payment rather than only at KYC — and it is also required
+  for the scenario to work at all now that a payment to an unverified payee is
+  refused before compliance runs.
+- Historical seeded payments now also carry a CREDITED timeline step and a
+  cleared ComplianceDecision, so the operator metrics derived from them
+  (settlement time, flagged rate) are meaningful. Still history only: the chain
+  does not backfill them.
 
 When wiring real settlement, mint MockUSDC to the seeded company wallets at boot
 (or in a faucet step) and call setCredential for each seeded credential so the
@@ -245,8 +285,57 @@ into enableRealSettlement() so the backend logs every PaymentFunded/Released/
 Refunded live with tx hash + block (the on-chain source of truth for the live
 tx feed, PRD FR-5.3). Verified: fund/release events logged as anvil mines them.
 
-REMAINING (P1, deferred): Day-3 Polygon Amoy public deploy + explorer links.
-Deliberately deferred — external RPC + a funded key is a venue risk, and local
-anvil is the live-demo path. The core P1 track (contracts + settlement + event
-listener) is COMPLETE and proven full-stack.
+  CORRECTION (2026-09-04): this section previously implied the live tx feed
+  reached the UI. It did not. The backend's websocket route destructured a
+  `.socket` off its handler argument, but @fastify/websocket v10 passes the
+  WebSocket itself — so registering a connection threw, the catch threw again
+  closing an undefined socket, and EVERY websocket connection failed. No
+  payment.state event, no alert, no notification ever arrived in a browser. The
+  chain-side listener was working the whole time; its output simply had nowhere
+  to go. Fixed; a connected payee now watches COMPLIANCE_CHECK -> RATE_LOCKED ->
+  FUNDED -> SETTLING -> COMPLETED arrive live, and admins receive metrics.tick.
+
+REMAINING (P1, deferred): a public testnet deploy (Base Sepolia / Polygon Amoy)
++ explorer links — CORRIDOR_ROADMAP item 7. Deliberately deferred: it needs an
+external RPC and a funded key. Local anvil remains the live-demo path. The core
+P1 track (contracts + settlement + event listener) is COMPLETE and proven
+full-stack.
+
+--------------------------------------------------------------------------------
+11. WHAT THE FRONTEND DOES WITH SETTLEMENT OUTPUT (added 2026-09-04)
+--------------------------------------------------------------------------------
+Everything the chain layer writes surfaces in the UI through the Payment row and
+the documents built from it — there is no second path, so real tx hashes replace
+simulated ones with no frontend change.
+
+  Payment.txHashFund / txHashRelease
+      Payment detail summary + the final step of the payout wizard. Rendered in
+      monospace, wrapped, unlinked while the chain is local anvil. When P1 lands
+      the public testnet deploy (roadmap item 7) these become explorer links; that
+      is the ONLY frontend change the real chain requires.
+  Payment.escrowId
+      Payment detail summary ("Escrow"), truncated.
+  Payment.escrowMode
+      Drives the approve-and-release / refund panel on payment detail. A HOLD
+      escrow sitting at FUNDED is where a company approves the work — this is the
+      UI half of the fund/release split described in §1.
+  ComplianceDecision.anchorTxHash
+      The compliance report document (/payments/:id/compliance.pdf).
+  Credential.hash + Credential.anchorTxHash
+      /me/identity — the freelancer sees the keccak hash mirrored into
+      IdentityRegistry and the anchor tx, which is the verify-once claim made
+      concrete. Never the credential JSON (GDPR, NFR-3).
+  Timeline steps FUNDED / SETTLING / RELEASED / CREDITED
+      The live payment timeline, driven by payment.state over the websocket.
+      Note the CORRECTION in §10: this only started working on 2026-09-04.
+  Escrow currently held
+      GET /admin/treasury sums srcAmountMinor over FUNDED / SETTLING / DISPUTED
+      payments per corridor — i.e. exactly the value the EscrowVault is holding.
+      Once real settlement is on, this figure should reconcile against the
+      vault's on-chain MockUSDC balance; a divergence means a fund or release
+      succeeded on-chain and failed to persist, which is worth an alert.
+
+Document availability is decided by the backend (GET /payments/:id/documents) and
+rendered as-is, so a document that depends on settlement having completed (the
+receipt, the FIRC) cannot be offered early by a UI that disagrees with the server.
 ================================================================================

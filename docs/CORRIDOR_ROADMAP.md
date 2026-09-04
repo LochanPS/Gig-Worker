@@ -1,6 +1,6 @@
 # Corridor — status & roadmap (single source of truth)
 
-*Updated 2026-09-04. Product formerly "GigBridge". This is the current handoff
+*Updated 2026-09-04 (frontend gap closure). Product formerly "GigBridge". This is the current handoff
 doc: what exists, how to work on it, and the ordered plan for what's next. Where
 it conflicts with older docs (`GO_LIVE_PLAN.md`, `ROADMAP_SIMPLE.txt`,
 `ROADMAP_3_PERSON_3_DAY.txt`), this wins. Build on other devices from this file.*
@@ -98,14 +98,20 @@ toggles company/freelancer/admin.
 1. 🤖 **Dispute AI triage** — mirror the payment adjudicator for disputes
    (auto-recommend refund/dismiss + confidence, escalate the rest). Reuses
    `agent/adjudicator.ts`; backend-contained.
-2. 🤖 **Persisted adjudication metrics + audit feed** — count auto-cleared /
-   auto-rejected / escalated; surface on the Operator monitor. New `/admin/adjudications`
-   + a metric; wire into the v2 summary card.
-3. 🤖 **UI gaps** — FIRC + credential-certificate PDF buttons (endpoints exist),
-   a notification center (bell + list; WS already emits `notification.new`),
-   EXPIRED-state UI, Freelancer dashboard v2.
-4. 🤖 **New-payout polish** — stepper UI, payee search, purpose-code picker,
-   rate-lock countdown, "＋ New payee" inline (creates a customer).
+2. ✅ **Persisted adjudication metrics + audit feed** — DONE. `GET /admin/adjudications`
+   counts auto-cleared / auto-rejected / escalated and the share settled without a
+   human, read from the AuditLog rows + decision notes the adjudicator already
+   writes (no schema change). Surfaced on the Operator monitor with a recent feed
+   showing each call's confidence and rationale.
+3. ✅ **UI gaps** — DONE. Notification centre (bell + unread badge + history +
+   mark read/all) and live toasts; payment documents now render from
+   `GET /payments/:id/documents` so FIRC appears and unavailable ones carry the
+   backend's reason; `/me/identity` credential card + certificate; `/me/history`;
+   EXPIRED chip + banner; `/admin/rules`; `/admin/treasury` (+ endpoint).
+4. ✅ **New-payout polish** — DONE. Four-step stepper, payee search, currency +
+   labelled FEMA purpose-code pickers, live re-quoting, vs-incumbent strip,
+   rate-lock countdown ring that disables confirm when the lock lapses, and
+   inline "＋ New payee" (creates + verifies a customer without leaving the flow).
 5. 🤖 **Logo** — swap the amber "C" tile for the real asset (sidebar + login + favicon)
    once provided. 🤝 asset from you.
 
@@ -123,6 +129,11 @@ toggles company/freelancer/admin.
 ### Reconciliation decisions (choose the canonical stack)
 8. 🤝 **Rich frontend**: adopt `variants/frontend-rich/` (visx charts, 18 routes) as the
    live UI + re-add the six feature pages in its design. Needs `pnpm install` (new deps).
+   *Decision 2026-09-04: NOT adopting for now — the live app carries the Corridor
+   branding, the êxponent design and UI for every feature, while the variant
+   predates all of it, targets the old shared API and adds ~30 deps. The live app
+   was extended instead. The variant stays preserved; revisit only if the chart
+   layer is wanted badly enough to pay for the port.*
 9. 🤝 **Backend variant**: keep the live old-lineage backend or migrate to `variants/p2/`.
    Pick one; do not run both.
 
@@ -154,12 +165,16 @@ toggles company/freelancer/admin.
 |---|---|---|
 | Backend | ~95% | external vendor integrations are seams, not live |
 | Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) | audit, real USDC, kill-switch, custody, public testnet |
-| Agent | explanation ✓ + payment adjudication ✓ | dispute triage, tuning, case management |
-| Frontend | ~90% | FIRC/credential buttons, notifications, freelancer v2, rich-charts variant |
+| Agent | explanation ✓ + payment adjudication ✓ + adjudication metrics ✓ | dispute triage, tuning, case management |
+| Frontend | ~98% | rich-charts variant (item 8) is the only open frontend decision |
 
 ---
 
 ## 6. Known caveats
+- Fixed 2026-09-04, worth knowing if you read older docs: the websocket had never
+  worked (wrong @fastify/websocket API), so no live timeline, alert or
+  notification had ever reached a browser. `docs/CONTRACTS_AND_SETTLEMENT.txt` §10
+  carries the correction.
 - Migrations not applied to any live DB (`prisma migrate deploy` at hosting).
 - `variants/*` are preserved, not wired — reconciliation is a decision (items 8–9).
 - The local mock preview is a demo aid only; real data needs the backend + a DB.
