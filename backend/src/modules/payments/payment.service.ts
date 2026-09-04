@@ -414,7 +414,7 @@ async function appendStep(paymentId: string, key: string, actor: string) {
 export async function getPayment(id: string, requester: Actor) {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id },
-    include: { timeline: { orderBy: { at: 'asc' } }, decision: true },
+    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true } }, freelancer: { select: { name: true } } },
   });
   assertParty(p, requester);
   return serialize(p);
@@ -427,14 +427,18 @@ export async function getPayment(id: string, requester: Actor) {
 export async function getPaymentInternal(id: string) {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id },
-    include: { timeline: { orderBy: { at: 'asc' } }, decision: true },
+    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true } }, freelancer: { select: { name: true } } },
   });
   return serialize(p);
 }
 
 export async function listPayments(userId: string, role: string) {
   const where = role === 'ADMIN' ? {} : role === 'COMPANY' ? { companyId: userId } : { freelancerId: userId };
-  const rows = await prisma.payment.findMany({ where, orderBy: { createdAt: 'desc' }, include: { timeline: { orderBy: { at: 'asc' } } } });
+  const rows = await prisma.payment.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    include: { timeline: { orderBy: { at: 'asc' } }, company: { select: { name: true } }, freelancer: { select: { name: true } } },
+  });
   return rows.map(serialize);
 }
 
@@ -443,7 +447,9 @@ function serialize(p: any) {
   return {
     id: p.id,
     companyId: p.companyId,
+    companyName: p.company?.name ?? null,
     freelancerId: p.freelancerId,
+    freelancerName: p.freelancer?.name ?? null,
     srcCurrency: p.srcCurrency,
     dstCurrency: p.dstCurrency,
     srcAmountMinor: p.srcAmountMinor,

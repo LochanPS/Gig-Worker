@@ -50,7 +50,7 @@ export default function Home() {
           <tbody>
             {payments.map((p) => (
               <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/me/payments/${p.id}`)}>
-                <td className="mono">{p.companyId.slice(0, 8)}</td>
+                <td>{p.companyName ?? <span className="mono">{p.companyId.slice(0, 8)}</span>}</td>
                 <td>{money(p.srcAmountMinor, p.srcCurrency)}</td>
                 <td>{money(p.dstAmountMinor, 'INR')}</td>
                 <td><Chip value={p.state} /></td>

@@ -153,3 +153,21 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .toast-title{font-size:12.5px;font-weight:600;text-transform:capitalize}
 .toast-body{font-size:12px;color:var(--ink-soft);margin-top:3px;line-height:1.45}
 @keyframes toast-in{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* --- Payout wizard: stepper, payee picker, rate-lock ring --- */
+.stepper{display:flex;gap:8px;list-style:none;padding:0;margin:0 0 18px;flex-wrap:wrap}
+.stepper li{display:flex;align-items:center;gap:8px;padding:7px 14px 7px 8px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;color:var(--ink-soft);background:var(--panel)}
+.stepper li .dot{width:21px;height:21px;border-radius:50%;background:var(--panel-2);color:var(--ink-soft);display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+.stepper li.on{border-color:var(--accent-line);background:var(--accent-soft);color:var(--ink)}
+.stepper li.on .dot{background:var(--accent);color:var(--accent-ink)}
+.stepper li.done .dot{background:var(--approve-soft);color:var(--approve)}
+
+.payeelist{border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:330px;overflow-y:auto}
+.payee{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+.payee:last-child{border-bottom:0}
+.payee:hover{background:var(--panel-2)}
+.payee.on{background:var(--accent-soft)}
+
+.ringwrap{position:relative;width:64px;height:64px;flex:none}
+.ring{width:64px;height:64px;display:block}
+.ringtext{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-variant-numeric:tabular-nums;font-family:'JetBrains Mono',ui-monospace,monospace}
