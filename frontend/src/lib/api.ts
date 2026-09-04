@@ -3,7 +3,7 @@ import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
-  CustomerSummary, CreateCustomerInput,
+  CustomerSummary, CreateCustomerInput, Notification, Credential, PaymentDocument,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -107,6 +107,19 @@ export const api = {
   createInvoice: (body: { companyId: string; amountMinor: number; currency: string; memo: string }) =>
     req<Invoice>('/invoices', { method: 'POST', body: JSON.stringify(body) }),
   approveInvoice: (id: string) => req<{ invoice: Invoice; payment: Payment }>(`/invoices/${id}/approve`, { method: 'POST' }),
+
+  // notifications (FR-7.1) — the bell menu and toasts
+  notifications: (all = false) => req<Notification[]>(`/notifications${all ? '?all=true' : ''}`),
+  unreadCount: () => req<{ count: number }>('/notifications/unread-count'),
+  markNotificationRead: (id: string) => req<Notification>(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllNotificationsRead: () => req<{ marked: number }>('/notifications/read-all', { method: 'POST' }),
+
+  // identity — the signed-in user's verifiable credential (404 when unverified)
+  myCredential: () => req<Credential>('/credentials/me'),
+
+  // documents: the backend owns which are available and why, so the UI renders
+  // its controls straight from this descriptor rather than guessing.
+  paymentDocuments: (id: string) => req<PaymentDocument[]>(`/payments/${id}/documents`),
 
   // admin
   queue: () => req<Array<Record<string, unknown>>>('/admin/queue'),
