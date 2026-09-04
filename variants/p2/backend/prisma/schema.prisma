@@ -1,0 +1,264 @@
+// GigBridge data model — TRD 4.1. Amounts are integers in minor units.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  COMPANY
+  FREELANCER
+  ADMIN
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum KybStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum PayoutPreference {
+  AUTO_CONVERT
+  HOLD
+}
+
+enum PaymentState {
+  DRAFT
+  COMPLIANCE_CHECK
+  FLAGGED
+  REJECTED
+  RATE_LOCKED
+  FUNDED
+  SETTLING
+  COMPLETED
+  REFUNDED
+  EXPIRED
+}
+
+enum Verdict {
+  APPROVE
+  FLAG
+  REJECT
+}
+
+enum AlertType {
+  VELOCITY
+  STRUCTURING
+  OUTLIER
+  SANCTIONS
+}
+
+enum InvoiceStatus {
+  OPEN
+  APPROVED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  role         Role
+  email        String   @unique
+  passwordHash String
+  country      String
+  name         String
+  walletAddress String?
+  createdAt    DateTime @default(now())
+
+  companyProfile    CompanyProfile?
+  freelancerProfile FreelancerProfile?
+  credentials       Credential[]
+  paymentsAsCompany    Payment[] @relation("CompanyPayments")
+  paymentsAsFreelancer Payment[] @relation("FreelancerPayments")
+  notifications     Notification[]
+  invoicesRaised    Invoice[] @relation("InvoiceFreelancer")
+  invoicesReceived  Invoice[] @relation("InvoiceCompany")
+  auditLogs         AuditLog[]
+}
+
+model CompanyProfile {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  legalName String
+  regNumber String
+  country   String
+  kybStatus KybStatus @default(PENDING)
+  // DEMO ONLY: server-generated custodial wallet private key, plaintext.
+  demoWalletKey String?
+}
+
+model FreelancerProfile {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  country         String
+  panOrTaxId      String?
+  kycStatus       KycStatus @default(PENDING)
+  payoutPreference PayoutPreference @default(AUTO_CONVERT)
+  // DEMO ONLY: server-generated custodial wallet private key, plaintext.
+  demoWalletKey   String?
+}
+
+model Credential {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  did            String
+  // Encrypted at rest (AES-256-GCM). Only the hash goes on-chain (GDPR).
+  credentialJson String
+  hash           String
+  issuedAt       DateTime @default(now())
+  expiresAt      DateTime
+  revoked        Boolean  @default(false)
+  anchorTxHash   String?
+
+  @@index([userId])
+}
+
+model FxRate {
+  id         String   @id @default(uuid())
+  pair       String
+  midRate    Float
+  lockedRate Float?
+  lockedUntil DateTime?
+  source     String
+  fetchedAt  DateTime @default(now())
+
+  payments   Payment[]
+
+  @@index([pair, fetchedAt])
+}
+
+model Payment {
+  id             String   @id @default(uuid())
+  companyId      String
+  company        User     @relation("CompanyPayments", fields: [companyId], references: [id])
+  freelancerId   String
+  freelancer     User     @relation("FreelancerPayments", fields: [freelancerId], references: [id])
+
+  srcCurrency    String
+  dstCurrency    String
+  srcAmountMinor Int
+  dstAmountMinor Int?
+  feeAmountMinor Int?
+  fxRateId       String?
+  fxRate         FxRate?  @relation(fields: [fxRateId], references: [id])
+
+  purposeCode    String
+  invoiceRef     String?
+  state          PaymentState @default(DRAFT)
+
+  // keccak256(uuid) escrow id used on-chain
+  escrowId       String?
+  txHashFund     String?
+  txHashRelease  String?
+
+  complianceDecisionId String? @unique
+  complianceDecision   ComplianceDecision? @relation(fields: [complianceDecisionId], references: [id])
+
+  timeline       TimelineEntry[]
+  alerts         Alert[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  completedAt    DateTime?
+
+  @@index([companyId])
+  @@index([freelancerId])
+  @@index([state])
+  @@index([createdAt])
+}
+
+model TimelineEntry {
+  id        String   @id @default(uuid())
+  paymentId String
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  state     PaymentState
+  note      String?
+  txHash    String?
+  at        DateTime @default(now())
+
+  @@index([paymentId, at])
+}
+
+model ComplianceDecision {
+  id              String   @id @default(uuid())
+  paymentId       String
+  verdict         Verdict
+  ruleResultsJson Json
+  agentExplanation String
+  anchorTxHash    String?
+  reviewedBy      String?
+  reviewNote      String?
+  createdAt       DateTime @default(now())
+
+  payment         Payment?
+
+  @@index([paymentId])
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  type        AlertType
+  paymentId   String?
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  severity    String
+  detailsJson Json
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([resolved, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model Invoice {
+  id           String   @id @default(uuid())
+  freelancerId String
+  freelancer   User     @relation("InvoiceFreelancer", fields: [freelancerId], references: [id])
+  companyId    String
+  company      User     @relation("InvoiceCompany", fields: [companyId], references: [id])
+  amountMinor  Int
+  currency     String
+  memo         String
+  status       InvoiceStatus @default(OPEN)
+  paymentId    String?
+  createdAt    DateTime @default(now())
+
+  @@index([companyId, status])
+  @@index([freelancerId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  entity     String
+  entityId   String
+  beforeJson Json?
+  afterJson  Json?
+  at         DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
+}
