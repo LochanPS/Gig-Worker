@@ -16,6 +16,8 @@ const I = {
   bank: 'M3 9l9-5 9 5M4 9v9M20 9v9M8 9v9M16 9v9M3 20h18',
   monitor: 'M3 12h4l2 5 4-12 2 7h6',
   people: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.87M16 4.13A4 4 0 0 1 16 11.5',
+  history: 'M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l4 2',
+  id: 'M3 5h18v14H3zM7 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM4 16c.6-2 1.8-3 3-3s2.4 1 3 3M14 9h5M14 13h5',
 } as const;
 
 function Icon({ d }: { d: string }) {
@@ -52,8 +54,10 @@ export default function Layout({ children }: { children: ReactNode }) {
         </>}
         {user?.role === 'FREELANCER' && <>
           <NavLink to="/me" end><Icon d={I.wallet} />My earnings</NavLink>
+          <NavLink to="/me/history"><Icon d={I.history} />History</NavLink>
           <NavLink to="/me/invoices"><Icon d={I.invoice} />Invoices</NavLink>
           <NavLink to="/me/payout-accounts"><Icon d={I.bank} />Payout methods</NavLink>
+          <NavLink to="/me/identity"><Icon d={I.id} />Identity</NavLink>
           <NavLink to="/verify"><Icon d={I.verify} />Verify</NavLink>
         </>}
         {user?.role === 'ADMIN' && <>

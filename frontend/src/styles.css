@@ -76,9 +76,10 @@ tbody tr:hover{background:var(--panel-2)}
 /* chips — soft pills, colour per status */
 .chip{display:inline-block;font-size:12px;font-weight:600;padding:4px 11px;border-radius:999px;
   background:var(--panel-2);border:1px solid var(--line-strong);color:var(--ink-soft);white-space:nowrap;letter-spacing:.01em}
-.chip.APPROVE,.chip.COMPLETED,.chip.RELEASED,.chip.Complete{background:var(--approve-soft);border-color:transparent;color:var(--approve)}
-.chip.FLAGGED,.chip.FLAG,.chip.DISPUTED,.chip.Partial,.chip.Overpaid,.chip.PAYOUT_FAILED{background:var(--flag-soft);border-color:transparent;color:var(--flag)}
-.chip.REJECTED,.chip.REJECT,.chip.REVERSED{background:var(--reject-soft);border-color:transparent;color:var(--reject)}
+.chip.APPROVE,.chip.COMPLETED,.chip.RELEASED,.chip.Complete,.chip.ACTIVE,.chip.VERIFIED{background:var(--approve-soft);border-color:transparent;color:var(--approve)}
+.chip.FLAGGED,.chip.FLAG,.chip.DISPUTED,.chip.Partial,.chip.Overpaid,.chip.PAYOUT_FAILED,.chip.PENDING{background:var(--flag-soft);border-color:transparent;color:var(--flag)}
+.chip.REJECTED,.chip.REJECT,.chip.REVERSED,.chip.REVOKED{background:var(--reject-soft);border-color:transparent;color:var(--reject)}
+.chip.EXPIRED{background:var(--panel-2);border-color:var(--line-strong);color:var(--ink-soft)}
 .chip.FUNDED,.chip.SETTLING,.chip.RATE_LOCKED,.chip.COMPLIANCE_CHECK{background:var(--info-soft);border-color:transparent;color:var(--info)}
 .chip.VERIFIED{background:var(--approve-soft);border-color:transparent;color:var(--approve)}
 

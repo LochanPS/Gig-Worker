@@ -16,15 +16,25 @@ export default function Home() {
   const done = payments.filter((p) => p.state === 'COMPLETED');
   const balanceMinor = done.reduce((s, p) => s + (p.dstAmountMinor ?? 0), 0);
 
+  // The share kept, measured from the fees actually charged on this freelancer's
+  // own payments — not a headline number. Falls back to the published 0.75% fee
+  // when nothing has settled yet, so a new account still sees the promise.
+  const grossMinor = done.reduce((s, p) => s + p.srcAmountMinor, 0);
+  const feeMinor = done.reduce((s, p) => s + (p.feeAmountMinor ?? 0), 0);
+  const keptPct = grossMinor > 0 ? 100 - (feeMinor / grossMinor) * 100 : 99.25;
+  const kept = `${keptPct.toFixed(2)}%`;
+
   return (
     <>
       <h1 className="page">My earnings</h1>
-      <p className="sub">Paid directly, in full — you keep 99.25%.</p>
+      <p className="sub">
+        Paid directly, in full — {grossMinor > 0 ? `you have kept ${kept} of everything earned.` : 'you keep about 99.25%.'}
+      </p>
 
       <div className="grid stats" style={{ marginBottom: 22 }}>
         <Stat label="Balance (INR)" value={money(balanceMinor, 'INR')} />
         <Stat label="Payments received" value={String(done.length)} />
-        <Stat label="You kept" value="99.25%" ghost="vs 90–92% on PayPal" />
+        <Stat label="You kept" value={kept} ghost={grossMinor > 0 ? 'vs 90–92% on PayPal' : 'once your first payment settles'} />
       </div>
 
       {done.length > 1 && (

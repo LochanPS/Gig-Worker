@@ -11,6 +11,8 @@ import CompanyInvoices from './pages/company/Invoices.js';
 import FreelancerHome from './pages/freelancer/Home.js';
 import FreelancerInvoices from './pages/freelancer/Invoices.js';
 import PayoutAccounts from './pages/freelancer/PayoutAccounts.js';
+import Identity from './pages/freelancer/Identity.js';
+import History from './pages/freelancer/History.js';
 import AdminMonitor from './pages/admin/Monitor.js';
 import PaymentDetail from './pages/PaymentDetail.js';
 import Verify from './pages/Verify.js';
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="/me" element={<FreelancerHome />} />
           <Route path="/me/invoices" element={<FreelancerInvoices />} />
           <Route path="/me/payout-accounts" element={<PayoutAccounts />} />
+          <Route path="/me/identity" element={<Identity />} />
+          <Route path="/me/history" element={<History />} />
           <Route path="/me/payments/:id" element={<PaymentDetail backTo="/me" />} />
           <Route path="/verify" element={<Verify />} />
         </>}
