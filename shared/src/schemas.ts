@@ -92,6 +92,28 @@ export const resolveQueueSchema = z.object({
   note: z.string().min(1),
 });
 
+// --- Add payout method (where the freelancer's money actually lands) ---
+export const addPayoutAccountSchema = z.object({
+  label: z.string().min(1), // e.g. "HDFC savings"
+  currency: z.enum(CURRENCIES),
+  accountName: z.string().min(1),
+  accountNumber: z.string().min(4), // stored masked; demo only
+  bankIdentifier: z.string().min(1), // IFSC / IBAN / routing
+});
+export type AddPayoutAccountInput = z.infer<typeof addPayoutAccountSchema>;
+
+// --- Disputes / reversals ---
+export const raiseDisputeSchema = z.object({
+  paymentId: z.string().uuid(),
+  reason: z.string().min(1),
+});
+export type RaiseDisputeInput = z.infer<typeof raiseDisputeSchema>;
+
+export const resolveDisputeSchema = z.object({
+  action: z.enum(['REFUND', 'DISMISS']),
+  note: z.string().min(1),
+});
+
 export const fxQuoteQuerySchema = z.object({
   pair: z.string().length(6),
   amount: z.coerce.number().int().positive(),

@@ -4,7 +4,7 @@ import { createPaymentSchema, confirmPaymentSchema, fxQuoteQuerySchema } from '@
 import { requireAuth, requireRole } from '../auth/auth.routes.js';
 import { addConn } from '../../lib/ws.js';
 import { createQuote, rateHistory } from '../fx/fx.service.js';
-import { createPayment, confirmPayment, releasePayment, refundPayment, getPayment, listPayments } from './payment.service.js';
+import { createPayment, confirmPayment, retryPayout, releasePayment, refundPayment, getPayment, listPayments } from './payment.service.js';
 
 export async function paymentRoutes(app: FastifyInstance) {
   // FX quote (needed by the payout wizard before creating a payment).
@@ -27,6 +27,11 @@ export async function paymentRoutes(app: FastifyInstance) {
   app.post('/payments/:id/confirm', { preHandler: [requireRole('COMPANY')] }, async (req) => {
     const { quoteId } = confirmPaymentSchema.parse(req.body);
     return confirmPayment((req.params as { id: string }).id, req.user.sub, quoteId);
+  });
+
+  app.post('/payments/:id/retry', { preHandler: [requireRole('COMPANY')] }, async (req) => {
+    const { quoteId } = confirmPaymentSchema.parse(req.body);
+    return retryPayout((req.params as { id: string }).id, req.user.sub, quoteId);
   });
 
   app.post('/payments/:id/release', { preHandler: [requireRole('COMPANY', 'ADMIN')] }, async (req) =>

@@ -49,6 +49,13 @@ export default function Verify() {
           <Chip value={status?.status ?? '—'} />
         </div>
 
+        {status?.status === 'REJECTED' && status.reason && (
+          <div className="card" style={{ borderLeft: '3px solid var(--reject)', marginBottom: 14, background: 'var(--panel-2)' }}>
+            <b>Verification failed.</b> <span className="muted">{status.reason}</span>
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Correct your details below and resubmit.</div>
+          </div>
+        )}
+
         {verified ? (
           <>
             <div className="muted" style={{ fontSize: 13 }}>You're verified and can transact.</div>

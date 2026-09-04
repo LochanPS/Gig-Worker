@@ -36,6 +36,15 @@ enum PaymentState {
   COMPLETED
   REFUNDED
   EXPIRED
+  PAYOUT_FAILED
+  DISPUTED
+  REVERSED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_REFUND
+  RESOLVED_DISMISS
 }
 
 enum Verdict {
@@ -100,6 +109,9 @@ model User {
   payRuns          PayRun[]  @relation("CompanyPayRuns")
   schedulesCreated PayoutSchedule[] @relation("CompanySchedules")
   schedulesReceived PayoutSchedule[] @relation("FreelancerSchedules")
+  payoutAccounts   PayoutAccount[]
+  disputesRaised   Dispute[] @relation("DisputeRaiser")
+  disputesResolved Dispute[] @relation("DisputeResolver")
 }
 
 model CompanyProfile {
@@ -176,6 +188,7 @@ model Payment {
   timeline   TimelineStep[]
   alerts     Alert[]
   invoice    Invoice?
+  disputes   Dispute[]
 
   @@index([companyId])
   @@index([freelancerId])
@@ -276,6 +289,44 @@ model Invoice {
   paymentId    String?       @unique
   payment      Payment?      @relation(fields: [paymentId], references: [id])
   createdAt    DateTime      @default(now())
+}
+
+// Where a freelancer's off-ramped fiat actually lands (the "add bank account"
+// screen the demo skipped). accountNumber is stored masked — demo only.
+model PayoutAccount {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label               String
+  currency            String
+  accountName         String
+  accountNumberMasked String
+  bankIdentifier      String
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  @@index([userId])
+}
+
+// A dispute opened on a payment. OPEN holds the payment in DISPUTED until an admin
+// resolves it (RESOLVED_REFUND -> REVERSED, RESOLVED_DISMISS -> COMPLETED).
+model Dispute {
+  id             String        @id @default(uuid())
+  paymentId      String
+  payment        Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  raisedById     String
+  raisedBy       User          @relation("DisputeRaiser", fields: [raisedById], references: [id])
+  raisedByRole   Role
+  reason         String
+  status         DisputeStatus @default(OPEN)
+  resolutionNote String?
+  resolvedById   String?
+  resolvedBy     User?         @relation("DisputeResolver", fields: [resolvedById], references: [id])
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  @@index([paymentId])
+  @@index([status])
 }
 
 model Notification {

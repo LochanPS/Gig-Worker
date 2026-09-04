@@ -8,12 +8,19 @@ const TRANSITIONS: Record<PaymentState, PaymentState[]> = {
   COMPLIANCE_CHECK: ['RATE_LOCKED', 'FLAGGED', 'REJECTED'],
   FLAGGED: ['RATE_LOCKED', 'COMPLIANCE_CHECK', 'REJECTED'], // admin resolves the flag
   REJECTED: [],
-  RATE_LOCKED: ['FUNDED', 'EXPIRED'],
+  // A payout with no valid destination fails before funding; it can be retried
+  // (back to RATE_LOCKED) once the payee adds a payout account.
+  RATE_LOCKED: ['FUNDED', 'EXPIRED', 'PAYOUT_FAILED'],
   FUNDED: ['SETTLING', 'REFUNDED'],
   SETTLING: ['COMPLETED', 'REFUNDED'],
-  COMPLETED: [],
+  // A completed payment can still be disputed (reversal window).
+  COMPLETED: ['DISPUTED'],
   REFUNDED: [],
   EXPIRED: [],
+  PAYOUT_FAILED: ['RATE_LOCKED', 'REFUNDED'],
+  // Admin resolves a dispute: REFUND -> REVERSED, DISMISS -> back to COMPLETED.
+  DISPUTED: ['REVERSED', 'COMPLETED'],
+  REVERSED: [],
 };
 
 export function canTransition(from: PaymentState, to: PaymentState): boolean {

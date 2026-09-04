@@ -14,9 +14,21 @@ import { audit } from '../../lib/audit.js';
 import { emitToUser } from '../../lib/ws.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
+import { isSanctioned } from '../compliance/rules/sanctions.js';
 import type { VerificationResult } from '@gigbridge/shared';
 
 const wallet = () => '0x' + randomBytes(20).toString('hex');
+
+// Mock KYC/KYB adjudication. Real vendors (Sumsub/Persona/Signzy) drop in here.
+// A submission is REJECTED when the party is on the sanctions watchlist, the tax
+// id is too short/malformed, or the document reference contains "fail" (a demo
+// lever so the failing-KYC branch is easy to show). Returns null when it passes.
+function rejectionReason(name: string, taxId: string, documentRef: string): string | null {
+  if (isSanctioned(name)) return 'Name matches a sanctions/watchlist entry — manual review required.';
+  if (taxId.trim().length < 4) return 'Tax ID / PAN is invalid or too short.';
+  if (documentRef.toLowerCase().includes('fail')) return 'Document could not be verified (unreadable or mismatched).';
+  return null;
+}
 
 // Provision a custodial demo wallet (idempotent) + issue an on-chain-anchored
 // credential (idempotent per user). Returns the credential hash + wallet address.
@@ -66,14 +78,23 @@ export async function submitKyc(
   const profile = await prisma.freelancerProfile.findUnique({ where: { userId: freelancerId } });
   if (!profile) throw Object.assign(new Error('Not a freelancer account'), { statusCode: 400 });
 
+  const reason = rejectionReason(profile.fullName, input.panOrTaxId, input.documentRef);
+  if (reason) {
+    await prisma.freelancerProfile.update({ where: { userId: freelancerId }, data: { panOrTaxId: input.panOrTaxId, kycStatus: 'REJECTED' } });
+    await audit(freelancerId, 'KYC_REJECTED', `user:${freelancerId}`, null, { reason });
+    await notify(freelancerId, 'KYC_REJECTED', `Verification failed: ${reason} You can correct your details and resubmit.`);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: freelancerId } });
+    return { userId: freelancerId, status: 'REJECTED', reason, credentialHash: null, walletAddress: user.walletAddress };
+  }
+
   const { hash, walletAddress } = await provision(freelancerId, profile.fullName);
   await prisma.freelancerProfile.update({
     where: { userId: freelancerId },
     data: { panOrTaxId: input.panOrTaxId, kycStatus: 'VERIFIED' },
   });
   await audit(freelancerId, 'KYC_VERIFIED', `user:${freelancerId}`, { kycStatus: 'PENDING' }, { kycStatus: 'VERIFIED', documentType: input.documentType });
-  await notify(freelancerId, 'KYC_VERIFIED', 'Identity verified — you can now receive payouts.');
-  return { userId: freelancerId, status: 'VERIFIED', credentialHash: hash, walletAddress };
+  await notify(freelancerId, 'KYC_VERIFIED', 'Identity verified — add a payout account to receive payments.');
+  return { userId: freelancerId, status: 'VERIFIED', reason: null, credentialHash: hash, walletAddress };
 }
 
 export async function submitKyb(
@@ -83,6 +104,15 @@ export async function submitKyb(
   const profile = await prisma.companyProfile.findUnique({ where: { userId: companyId } });
   if (!profile) throw Object.assign(new Error('Not a company account'), { statusCode: 400 });
 
+  const reason = rejectionReason(input.legalName, input.regNumber, input.regNumber);
+  if (reason) {
+    await prisma.companyProfile.update({ where: { userId: companyId }, data: { legalName: input.legalName, regNumber: input.regNumber, country: input.country, kybStatus: 'REJECTED' } });
+    await audit(companyId, 'KYB_REJECTED', `user:${companyId}`, null, { reason });
+    await notify(companyId, 'KYB_REJECTED', `Business verification failed: ${reason} You can correct your details and resubmit.`);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: companyId } });
+    return { userId: companyId, status: 'REJECTED', reason, credentialHash: null, walletAddress: user.walletAddress };
+  }
+
   const { hash, walletAddress } = await provision(companyId, input.legalName);
   await prisma.companyProfile.update({
     where: { userId: companyId },
@@ -90,7 +120,7 @@ export async function submitKyb(
   });
   await audit(companyId, 'KYB_VERIFIED', `user:${companyId}`, { kybStatus: 'PENDING' }, { kybStatus: 'VERIFIED', regNumber: input.regNumber });
   await notify(companyId, 'KYB_VERIFIED', 'Business verified — you can now send payouts.');
-  return { userId: companyId, status: 'VERIFIED', credentialHash: hash, walletAddress };
+  return { userId: companyId, status: 'VERIFIED', reason: null, credentialHash: hash, walletAddress };
 }
 
 // Current verification status for the logged-in user (drives the onboarding banner).
@@ -103,6 +133,7 @@ export async function getVerificationStatus(userId: string): Promise<Verificatio
   return {
     userId,
     status,
+    reason: null,
     credentialHash: user.credentials[0]?.hash ?? null,
     walletAddress: user.walletAddress,
   };

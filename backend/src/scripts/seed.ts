@@ -63,6 +63,20 @@ async function seedUser(u: SeedUser) {
         anchorTxHash: '0x' + randomBytes(32).toString('hex'),
       },
     });
+    // Verified freelancers get an INR payout account so payouts have a destination
+    // (the PAYOUT_FAILED gate). New self-serve signups add theirs via the UI.
+    if (u.role === 'FREELANCER') {
+      await prisma.payoutAccount.create({
+        data: {
+          userId: u.id,
+          label: `${u.country === 'IN' ? 'HDFC' : 'Wise'} account`,
+          currency: 'INR',
+          accountName: u.name,
+          accountNumberMasked: '••••' + Math.floor(1000 + Math.random() * 9000),
+          bankIdentifier: u.country === 'IN' ? 'HDFC0001234' : 'TRWIBEB1XXX',
+        },
+      });
+    }
   }
 }
 

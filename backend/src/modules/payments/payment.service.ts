@@ -11,6 +11,7 @@ import { getComplianceEngine } from '../compliance/compliance.interface.js';
 import { raiseAlertsFromRules } from '../alerts/alert.service.js';
 import { markInvoicePaidByPayment } from '../invoices/invoice.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
+import { hasActivePayoutAccount } from '../payouts/payout-account.service.js';
 import type { PaymentState } from '@gigbridge/shared';
 import type { CreatePaymentInput } from '@gigbridge/shared';
 
@@ -155,6 +156,17 @@ export async function confirmPayment(paymentId: string, actorId: string, quoteId
   });
   await transition(paymentId, 'RATE_LOCKED', { actor: actorId, timelineKey: 'RATE_LOCKED' });
 
+  // Payout-destination gate: the payee must have an active account in the
+  // destination currency, or the money has nowhere to land. This is a real
+  // unhappy path (PAYOUT_FAILED) — the payee adds an account and the company retries.
+  if (!(await hasActivePayoutAccount(p.freelancerId, p.dstCurrency))) {
+    await transition(paymentId, 'PAYOUT_FAILED', {
+      actor: 'system',
+      extra: { reason: `Payee has no active ${p.dstCurrency} payout account.` },
+    });
+    return getPayment(paymentId, actorId);
+  }
+
   // Fund escrow on-chain (simulated until P1 swaps in real settlement).
   const complianceHash = keccak256(toUtf8(p.decision?.id ?? paymentId));
   const funded = await getSettlement().fund(
@@ -174,6 +186,32 @@ export async function confirmPayment(paymentId: string, actorId: string, quoteId
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
   await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
 
+  return getPayment(paymentId, actorId);
+}
+
+// Retry a payout that failed for lack of a destination account. Re-checks the
+// gate, then funds + settles. Needs a fresh quote (the old lock is gone).
+export async function retryPayout(paymentId: string, actorId: string, quoteId: string) {
+  const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId }, include: { freelancer: true, decision: true } });
+  if (p.state !== 'PAYOUT_FAILED') {
+    throw Object.assign(new Error(`Only a PAYOUT_FAILED payment can be retried (state ${p.state})`), { statusCode: 409 });
+  }
+  if (!(await hasActivePayoutAccount(p.freelancerId, p.dstCurrency))) {
+    throw Object.assign(new Error(`Payee still has no active ${p.dstCurrency} payout account.`), { statusCode: 409 });
+  }
+  const quote = getQuote(quoteId);
+  if (!quote || !isQuoteValid(quote)) throw Object.assign(new Error('Quote missing or expired — request a new quote'), { statusCode: 409 });
+
+  await transition(paymentId, 'RATE_LOCKED', { actor: actorId, timelineKey: 'RATE_LOCKED', extra: { retry: true } });
+  const complianceHash = keccak256(toUtf8(p.decision?.id ?? paymentId));
+  const funded = await getSettlement().fund(paymentId, p.freelancer.walletAddress ?? '0xpayee', p.srcAmountMinor, quote.feeMinor, complianceHash);
+  await prisma.payment.update({ where: { id: paymentId }, data: { escrowId: funded.escrowId, dstAmountMinor: quote.payeeReceivesMinor, feeAmountMinor: quote.feeMinor } });
+  await transition(paymentId, 'FUNDED', { actor: actorId, timelineKey: 'FUNDED', txHash: funded.txHash });
+  await transition(paymentId, 'SETTLING', { actor: 'settlement', timelineKey: 'SETTLING' });
+  const released = await getSettlement().release(funded.escrowId);
+  await transition(paymentId, 'COMPLETED', { actor: 'platform', timelineKey: 'RELEASED', txHash: released.txHash });
+  await appendStep(paymentId, 'CREDITED', 'off-ramp');
+  await markInvoicePaidByPayment(paymentId);
   return getPayment(paymentId, actorId);
 }
 
@@ -207,6 +245,27 @@ export async function adminResolveFlag(paymentId: string, action: 'APPROVE' | 'R
     await transition(paymentId, 'COMPLIANCE_CHECK', { actor: adminId, timelineKey: 'COMPLIANCE_APPROVED', extra: { reviewNote: note, resolved: true } });
   }
   return getPayment(paymentId, adminId);
+}
+
+// --- Dispute transitions (called by the disputes module) ---
+// Put a completed payment on hold while a dispute is open.
+export async function holdForDispute(paymentId: string, actorId: string) {
+  await transition(paymentId, 'DISPUTED', { actor: actorId, extra: { reason: 'dispute opened' } });
+  return getPayment(paymentId, actorId);
+}
+
+// Resolve a dispute in the payer's favour: refund the escrow, mark REVERSED.
+export async function reverseDisputed(paymentId: string, actorId: string) {
+  const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  const refunded = await getSettlement().refund(p.escrowId ?? '0x');
+  await transition(paymentId, 'REVERSED', { actor: actorId, txHash: refunded.txHash, extra: { txHash: refunded.txHash } });
+  return getPayment(paymentId, actorId);
+}
+
+// Resolve a dispute in the payee's favour: restore the completed payment.
+export async function dismissDisputed(paymentId: string, actorId: string) {
+  await transition(paymentId, 'COMPLETED', { actor: actorId, extra: { disputeDismissed: true } });
+  return getPayment(paymentId, actorId);
 }
 
 export async function refundPayment(paymentId: string, actorId: string) {

@@ -19,6 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         {user?.role === 'FREELANCER' && <>
           <NavLink to="/me" end>My earnings</NavLink>
           <NavLink to="/me/invoices">Invoices</NavLink>
+          <NavLink to="/me/payout-accounts">Payout methods</NavLink>
           <NavLink to="/verify">Verify</NavLink>
         </>}
         {user?.role === 'ADMIN' && <NavLink to="/admin" end>Monitor</NavLink>}

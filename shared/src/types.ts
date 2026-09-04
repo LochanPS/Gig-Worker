@@ -12,6 +12,7 @@ import type {
   PurposeCode,
   PayRunStatus,
   Cadence,
+  DisputeStatus,
 } from './enums.js';
 
 export interface User {
@@ -184,11 +185,42 @@ export interface PayoutSchedule {
 }
 
 // Result of submitting KYC/KYB for verification (self-serve onboarding).
+// A submission can be REJECTED (sanctions hit, bad document) — the reason drives
+// the failing-KYC screen and the resubmit path.
 export interface VerificationResult {
   userId: string;
   status: KycStatus;
+  reason: string | null; // populated when status === 'REJECTED'
   credentialHash: string | null; // keccak256 mirrored to IdentityRegistry when VERIFIED
   walletAddress: string | null; // provisioned on verification
+}
+
+// A freelancer's payout destination — where the off-ramped fiat actually lands.
+// A payment cannot settle to a payee with no active account for the dst currency.
+export interface PayoutAccount {
+  id: string;
+  userId: string;
+  label: string;
+  currency: Currency;
+  accountName: string;
+  accountNumberMasked: string; // only last 4 shown
+  bankIdentifier: string;
+  active: boolean;
+  createdAt: string;
+}
+
+// A dispute opened on a payment. While OPEN the payment sits in DISPUTED.
+export interface Dispute {
+  id: string;
+  paymentId: string;
+  raisedById: string;
+  raisedByRole: Role;
+  reason: string;
+  status: DisputeStatus;
+  resolutionNote: string | null;
+  resolvedById: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
 export interface AdminMetrics {

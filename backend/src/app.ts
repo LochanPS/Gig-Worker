@@ -15,6 +15,8 @@ import { documentRoutes } from './modules/documents/document.routes.js';
 import { verificationRoutes } from './modules/verification/verification.routes.js';
 import { payRunRoutes } from './modules/payrun/payrun.routes.js';
 import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
+import { payoutAccountRoutes } from './modules/payouts/payout-account.routes.js';
+import { disputeRoutes } from './modules/disputes/dispute.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
@@ -45,6 +47,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(verificationRoutes);
       await api.register(payRunRoutes);
       await api.register(scheduleRoutes);
+      await api.register(payoutAccountRoutes);
+      await api.register(disputeRoutes);
     },
     { prefix: '/api/v1' },
   );

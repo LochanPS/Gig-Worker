@@ -12,8 +12,18 @@ export const PAYMENT_STATES = [
   'COMPLETED',
   'REFUNDED',
   'EXPIRED',
+  // Unhappy-path states (real money spends real time here). Additive — the happy
+  // path DRAFT..COMPLETED is unchanged.
+  'PAYOUT_FAILED', // no valid payout destination for the payee (bank account missing)
+  'DISPUTED', // a party opened a dispute; funds held pending admin resolution
+  'REVERSED', // dispute resolved in payer's favour — escrow refunded
 ] as const;
 export type PaymentState = (typeof PAYMENT_STATES)[number];
+
+// Dispute lifecycle. A dispute puts its payment ON hold (DISPUTED) until an admin
+// resolves it: REFUND reverses the payment, DISMISS restores it.
+export const DISPUTE_STATUSES = ['OPEN', 'RESOLVED_REFUND', 'RESOLVED_DISMISS'] as const;
+export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
 
 export const VERDICTS = ['APPROVE', 'FLAG', 'REJECT'] as const;
 export type Verdict = (typeof VERDICTS)[number];

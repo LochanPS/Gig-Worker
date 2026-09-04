@@ -2,6 +2,7 @@
 import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
+  PayoutAccount, Dispute, AddPayoutAccountInput,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -74,6 +75,19 @@ export const api = {
     req<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } }>('/payments', { method: 'POST', body: JSON.stringify(body) }),
   confirmPayment: (id: string, quoteId: string) =>
     req<Payment>(`/payments/${id}/confirm`, { method: 'POST', body: JSON.stringify({ quoteId }) }),
+  retryPayout: (id: string, quoteId: string) =>
+    req<Payment>(`/payments/${id}/retry`, { method: 'POST', body: JSON.stringify({ quoteId }) }),
+
+  // payout methods (add bank account)
+  payoutAccounts: () => req<PayoutAccount[]>('/payout-accounts'),
+  addPayoutAccount: (body: AddPayoutAccountInput) => req<PayoutAccount>('/payout-accounts', { method: 'POST', body: JSON.stringify(body) }),
+  removePayoutAccount: (id: string) => req<PayoutAccount>(`/payout-accounts/${id}/remove`, { method: 'POST' }),
+
+  // disputes & reversals
+  disputes: () => req<Dispute[]>('/disputes'),
+  raiseDispute: (paymentId: string, reason: string) => req<Dispute>('/disputes', { method: 'POST', body: JSON.stringify({ paymentId, reason }) }),
+  resolveDispute: (id: string, action: 'REFUND' | 'DISMISS', note: string) =>
+    req<Dispute>(`/disputes/${id}/resolve`, { method: 'POST', body: JSON.stringify({ action, note }) }),
 
   // invoices
   invoices: () => req<Invoice[]>('/invoices'),

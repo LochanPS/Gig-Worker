@@ -29,7 +29,10 @@ describe('payment state machine', () => {
   });
 
   it('marks terminal states', () => {
-    expect(isTerminal('COMPLETED')).toBe(true);
+    // COMPLETED is no longer terminal — a completed payment can be DISPUTED
+    // (reversal window). REVERSED is the new terminal end of that path.
+    expect(isTerminal('COMPLETED')).toBe(false);
+    expect(isTerminal('REVERSED')).toBe(true);
     expect(isTerminal('REJECTED')).toBe(true);
     expect(isTerminal('REFUNDED')).toBe(true);
     expect(isTerminal('DRAFT')).toBe(false);
