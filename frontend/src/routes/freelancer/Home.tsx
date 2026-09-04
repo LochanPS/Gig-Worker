@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth';
 import { useAsync } from '@/lib/useAsync';
 import { useRealtime } from '@/lib/realtime';
 import { gateway } from '@/lib/gateway';
-import { earningsSeries } from '@/lib/demoSeries';
 import { formatMoney, retentionPct } from '@/lib/money';
 import { INCUMBENT_FEE_PCT } from '@gigbridge/shared';
 import { formatDate } from '@/lib/format';
@@ -69,7 +68,19 @@ export function FreelancerHome() {
     }
   }, [merged, byPayment, celebrated]);
 
-  const earnings = useMemo(() => earningsSeries(12), []);
+  // Real 12-week earnings for this account, bucketed from completed payments.
+  const earnings = useMemo(() => {
+    const weekMs = 7 * 86_400_000;
+    const now = Date.now();
+    const buckets = Array.from({ length: 12 }, (_, i) => ({ name: `W${i + 1}`, earnedMinor: 0 }));
+    for (const p of completed) {
+      if (p.dstCurrency !== 'INR' || p.dstAmountMinor == null) continue;
+      const weeksAgo = Math.floor((now - new Date(p.createdAt).getTime()) / weekMs);
+      const idx = 11 - weeksAgo;
+      if (idx >= 0 && idx < 12) buckets[idx].earnedMinor += p.dstAmountMinor;
+    }
+    return buckets;
+  }, [completed]);
   const incumbentKept = (1 - INCUMBENT_FEE_PCT) * 100;
 
   return (
@@ -118,7 +129,13 @@ export function FreelancerHome() {
             <h2 className="text-[13px] font-medium">Earnings, last 12 weeks</h2>
           </div>
           <div className="p-4">
-            <SimpleBars data={earnings} dataKey="earned" height={240} />
+            <SimpleBars
+              data={earnings}
+              dataKey="earnedMinor"
+              height={240}
+              valueLabel="Net received"
+              valueFormat={(n) => formatMoney(n, 'INR')}
+            />
           </div>
         </Panel>
 

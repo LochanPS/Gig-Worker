@@ -5,6 +5,7 @@ import { ParentSize } from "@visx/responsive";
 import { scaleBand, scaleLinear } from "@visx/scale";
 import type { Transition } from "motion/react";
 import {
+  type CSSProperties,
   memo,
   type ReactElement,
   type ReactNode,
@@ -73,6 +74,8 @@ export interface BarChartProps {
   revealSignature?: string;
   /** Aspect ratio as "width / height". Default: "2 / 1" */
   aspectRatio?: string;
+  /** Inline container styles (e.g. a fixed height with aspectRatio="auto"). */
+  style?: CSSProperties;
   /** Additional class name for the container */
   className?: string;
   /** Gap between bar groups as a fraction of band width (0-1). Default: 0.2 */
@@ -678,6 +681,7 @@ export function BarChart({
   enterTransition,
   revealSignature,
   aspectRatio = "2 / 1",
+  style,
   className = "",
   barGap = 0.2,
   barWidth,
@@ -696,7 +700,7 @@ export function BarChart({
     <div
       className={cn("relative w-full overflow-visible", className)}
       ref={containerRef}
-      style={{ aspectRatio }}
+      style={{ aspectRatio, ...style }}
     >
       <ParentSize debounceTime={10}>
         {({ width, height }) => (
