@@ -67,7 +67,13 @@ export interface TimelineStep {
 export interface Payment {
   id: string;
   companyId: string;
+  // Counterparty names travel with the payment so every table can label a row
+  // without a second request — both parties already see both names on the
+  // receipt, so this exposes nothing new. Null only on rows read before the
+  // relation was included.
+  companyName: string | null;
   freelancerId: string;
+  freelancerName: string | null;
   srcCurrency: Currency;
   dstCurrency: Currency;
   srcAmountMinor: number;

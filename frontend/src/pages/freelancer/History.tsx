@@ -44,13 +44,14 @@ export default function History() {
         <table>
           <thead>
             <tr>
-              <th>Date</th><th>Gross</th><th>Fee</th><th>Rate</th><th>Net received</th><th>You kept</th><th>Status</th>
+              <th>Date</th><th>From</th><th>Gross</th><th>Fee</th><th>Rate</th><th>Net received</th><th>You kept</th><th>Status</th>
             </tr>
           </thead>
           <tbody>
             {payments.map((p) => (
               <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/me/payments/${p.id}`)}>
                 <td className="muted">{p.createdAt.slice(0, 10)}</td>
+                <td>{p.companyName ?? <span className="mono">{p.companyId.slice(0, 8)}</span>}</td>
                 <td>{money(p.srcAmountMinor, p.srcCurrency)}</td>
                 <td className="muted">{money(p.feeAmountMinor, p.srcCurrency)}</td>
                 <td className="mono">{effectiveRate(p)}</td>
@@ -59,7 +60,7 @@ export default function History() {
                 <td><Chip value={p.state} /></td>
               </tr>
             ))}
-            {payments.length === 0 && <tr><td colSpan={7} className="muted">No payments yet.</td></tr>}
+            {payments.length === 0 && <tr><td colSpan={8} className="muted">No payments yet.</td></tr>}
           </tbody>
         </table>
       </div>

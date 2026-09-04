@@ -325,3 +325,15 @@ BUGS FIXED IN THE v2 DASHBOARD:
 STYLES: the new CSS uses --ink-soft; there is no --muted custom property in this
   design system (only a .muted class), so var(--muted) would have silently
   fallen back to inherited colour.
+
+2026-09-04 (cont.) — WIZARD + COUNTERPARTY NAMES
+SHARED: types.ts Payment += companyName, freelancerName (nullable). Both parties
+  already see both names on the receipt, so this exposes nothing new; it removes
+  a second round trip per table and the UUID-prefix placeholders.
+BACKEND: payment.service.ts serialize() + the three queries feeding it now
+  include the company/freelancer name relation. Mock fixtures updated.
+FRONTEND: NewPayout rebuilt as the 4-step wizard (UI_SPEC 3.2) — stepper, payee
+  search, inline "+ New payee" via createCustomer, currency + FEMA purpose-code
+  pickers, live quote with the vs-incumbent strip, and a rate-lock countdown ring
+  that disables confirm when the lock lapses. Overview / freelancer Home /
+  History / PaymentDetail render names instead of UUID prefixes.

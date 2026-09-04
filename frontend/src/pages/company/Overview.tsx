@@ -85,7 +85,7 @@ export default function Overview() {
           <tbody>
             {payments.slice(0, 25).map((p) => (
               <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/company/payments/${p.id}`)}>
-                <td className="mono">{p.freelancerId.slice(0, 8)}</td>
+                <td>{p.freelancerName ?? <span className="mono">{p.freelancerId.slice(0, 8)}</span>}</td>
                 <td>{money(p.srcAmountMinor, p.srcCurrency)}</td>
                 <td className="mono">{p.srcCurrency}→{p.dstCurrency}</td>
                 <td><Chip value={p.state} /></td>

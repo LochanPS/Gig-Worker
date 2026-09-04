@@ -89,6 +89,8 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
         <div className="card">
           <h2 style={{ fontSize: 14, margin: '0 0 12px' }}>Summary</h2>
           <div className="kv">
+            <span className="k">From</span><span className="v">{p.companyName ?? '—'}</span>
+            <span className="k">To</span><span className="v">{p.freelancerName ?? '—'}</span>
             <span className="k">Corridor</span><span className="v mono">{p.srcCurrency}→{p.dstCurrency}</span>
             <span className="k">Amount sent</span><span className="v">{money(p.srcAmountMinor, p.srcCurrency)}</span>
             <span className="k">Fee</span><span className="v">{money(p.feeAmountMinor, p.srcCurrency)}</span>
