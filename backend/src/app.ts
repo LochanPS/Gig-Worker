@@ -22,6 +22,18 @@ import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
 import { payoutAccountRoutes } from './modules/payouts/payout-account.routes.js';
 import { disputeRoutes } from './modules/disputes/dispute.routes.js';
 
+// HTTP status -> stable error code for the {error:{code,message}} contract
+// (BUILD_CONTRACTS §4).
+const ERROR_CODES: Record<number, string> = {
+  400: 'BAD_REQUEST',
+  401: 'AUTH',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+  422: 'VALIDATION',
+  500: 'INTERNAL',
+};
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
 
@@ -35,8 +47,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     if (err instanceof ZodError) {
       return reply.code(400).send({ error: { code: 'VALIDATION', message: err.errors[0]?.message ?? 'Invalid input', issues: err.errors } });
     }
-    reply.log.error(err);
-    return reply.code(err.statusCode ?? 500).send({ error: { code: 'INTERNAL', message: err.message } });
+    const status = err.statusCode ?? 500;
+    // Only a genuine 5xx is an internal error. Deliberate 4xx errors thrown by the
+    // modules (403 party checks, 409 illegal transitions, 404s) were all reported
+    // as code INTERNAL, which told a client nothing about what went wrong.
+    if (status >= 500) reply.log.error(err);
+    return reply.code(status).send({ error: { code: ERROR_CODES[status] ?? (status >= 500 ? 'INTERNAL' : 'BAD_REQUEST'), message: err.message } });
   });
 
   app.get('/health', async () => ({ ok: true }));

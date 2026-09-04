@@ -101,8 +101,29 @@ async function seedHistoricalPayment(companyId: string, freelancerId: string, da
       createdAt: created,
     },
   });
+  // Historical payments used to record CREATED and RELEASED at the SAME instant,
+  // which made every settlement duration zero — so the operator dashboard's
+  // average settlement time, the metric that carries the whole "minutes, not 3-5
+  // days" claim, read 0s. Spread them over a plausible 25-70s instead, and record
+  // the credited step so the metric measures the full journey to the payee.
+  const settleSeconds = 25 + Math.round(Math.random() * 45);
+  const released = new Date(created.getTime() + settleSeconds * 1000);
+  const credited = new Date(released.getTime() + 2000);
   await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'CREATED', label: 'Payment created', state: 'DRAFT', actor: companyId, at: created } });
-  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'RELEASED', label: 'Released to payee', state: 'COMPLETED', actor: 'platform', at: created } });
+  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'RELEASED', label: 'Released to payee', state: 'COMPLETED', actor: 'platform', at: released } });
+  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'CREDITED', label: 'Payee credited', state: 'COMPLETED', actor: 'off-ramp', at: credited } });
+
+  // A cleared compliance decision per historical payment. Without these the
+  // flagged-rate metric was computed over a single row.
+  await prisma.complianceDecision.create({
+    data: {
+      paymentId: p.id,
+      verdict: 'APPROVE',
+      ruleResults: [] as never,
+      agentExplanation: 'Cleared on all applicable rules for this corridor (historical record).',
+      createdAt: created,
+    },
+  });
 }
 
 async function main() {

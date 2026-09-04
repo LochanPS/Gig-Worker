@@ -1,5 +1,6 @@
 // Payment routes (BUILD_CONTRACTS §4) + the authenticated websocket endpoint.
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { WebSocket } from '@fastify/websocket';
 import type { Role } from '@gigbridge/shared';
 import { createPaymentSchema, confirmPaymentSchema, fxQuoteQuerySchema } from '@gigbridge/shared';
 import { requireAuth, requireRole } from '../auth/auth.routes.js';
@@ -58,13 +59,19 @@ export async function paymentRoutes(app: FastifyInstance) {
   });
 
   // Authenticated websocket: /api/v1/ws?token=<jwt>
-  app.get('/ws', { websocket: true }, (conn, req) => {
+  //
+  // @fastify/websocket v10 hands the handler the WebSocket itself. This used to
+  // destructure a `.socket` off it, which is undefined — so registering the
+  // connection threw, and the catch then threw again closing that same undefined
+  // socket. Every websocket connection failed, which meant no live payment
+  // timeline, no alert feed and no notification push reached any client.
+  app.get('/ws', { websocket: true }, (socket: WebSocket, req) => {
     const token = (req.query as { token?: string }).token;
     try {
       const decoded = app.jwt.verify<{ sub: string; role: string }>(token ?? '');
-      addConn({ socket: conn.socket, userId: decoded.sub, role: decoded.role });
+      addConn({ socket, userId: decoded.sub, role: decoded.role });
     } catch {
-      conn.socket.close();
+      socket.close();
     }
   });
 }
