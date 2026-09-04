@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from '../lib/auth.js';
+import NotificationBell from './NotificationBell.js';
+import Toasts from './Toasts.js';
 
 // Minimal inline icon set (no icon dependency) — 24px stroke glyphs.
 const I = {
@@ -60,6 +62,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </>}
 
         <div className="spacer" />
+        <NotificationBell />
         <div className="who">
           <span className="avatar">{initials(user?.name)}</span>
           <span>{user?.name}<div className="role">{user?.role}</div></span>
@@ -67,6 +70,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <button className="btn ghost" onClick={logout} style={{ width: '100%', marginTop: 4 }}>Sign out</button>
       </nav>
       <main className="main">{children}</main>
+      <Toasts />
     </div>
   );
 }
