@@ -32,6 +32,13 @@ const envSchema = z.object({
   // (BUILD_CONTRACTS §5 says every 5s) and how often stale rate locks are swept.
   METRICS_TICK_SECONDS: z.coerce.number().default(5),
   RATE_LOCK_SWEEP_SECONDS: z.coerce.number().default(60),
+  // AI adjudication of FLAGGED payments. On by default: the agent auto-clears or
+  // auto-rejects confident cases and escalates only the rest to the human queue.
+  // Set false to send every flag straight to a human.
+  AI_ADJUDICATION: z
+    .string()
+    .default('true')
+    .transform((v) => v !== 'false'),
 });
 
 export const env = envSchema.parse(process.env);

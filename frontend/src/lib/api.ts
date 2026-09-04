@@ -3,6 +3,7 @@ import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
+  CustomerSummary, CreateCustomerInput,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -51,6 +52,12 @@ export const api = {
 
   // freelancer roster (FR-6.1) — the payout wizard's payee list
   freelancers: () => req<FreelancerSummary[]>('/directory/freelancers'),
+
+  // customers (parties: companies + freelancers)
+  customers: (role?: 'COMPANY' | 'FREELANCER') => req<CustomerSummary[]>(`/customers${role ? `?role=${role}` : ''}`),
+  customer: (id: string) => req<CustomerSummary>(`/customers/${id}`),
+  createCustomer: (body: CreateCustomerInput) => req<CustomerSummary>('/customers', { method: 'POST', body: JSON.stringify(body) }),
+  verifyCustomer: (id: string) => req<{ id: string }>(`/admin/verify/${id}`, { method: 'POST', body: JSON.stringify({}) }),
 
   // batch pay-run (FR-2.5)
   payRuns: () => req<PayRun[]>('/payruns'),

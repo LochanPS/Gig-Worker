@@ -13,6 +13,7 @@ const I = {
   wallet: 'M3 7h15a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3zM3 7V6a2 2 0 0 1 2-2h11M17 12h.01',
   bank: 'M3 9l9-5 9 5M4 9v9M20 9v9M8 9v9M16 9v9M3 20h18',
   monitor: 'M3 12h4l2 5 4-12 2 7h6',
+  people: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.87M16 4.13A4 4 0 0 1 16 11.5',
 } as const;
 
 function Icon({ d }: { d: string }) {
@@ -44,6 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/company/batch"><Icon d={I.batch} />Batch pay</NavLink>
           <NavLink to="/company/schedules"><Icon d={I.repeat} />Recurring</NavLink>
           <NavLink to="/company/invoices"><Icon d={I.invoice} />Invoices</NavLink>
+          <NavLink to="/customers"><Icon d={I.people} />Customers</NavLink>
           <NavLink to="/verify"><Icon d={I.verify} />Verify</NavLink>
         </>}
         {user?.role === 'FREELANCER' && <>
@@ -52,7 +54,10 @@ export default function Layout({ children }: { children: ReactNode }) {
           <NavLink to="/me/payout-accounts"><Icon d={I.bank} />Payout methods</NavLink>
           <NavLink to="/verify"><Icon d={I.verify} />Verify</NavLink>
         </>}
-        {user?.role === 'ADMIN' && <NavLink to="/admin" end><Icon d={I.monitor} />Monitor</NavLink>}
+        {user?.role === 'ADMIN' && <>
+          <NavLink to="/admin" end><Icon d={I.monitor} />Monitor</NavLink>
+          <NavLink to="/customers"><Icon d={I.people} />Customers</NavLink>
+        </>}
 
         <div className="spacer" />
         <div className="who">

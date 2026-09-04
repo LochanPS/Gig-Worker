@@ -100,7 +100,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .login .box{width:100%;max-width:400px}
 
 /* agent panel */
-.agent{background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:10px;padding:14px 16px;color:var(--ink);font-size:14px;line-height:1.6}
+.agent{background:var(--accent-soft);border-radius:10px;padding:14px 16px;color:var(--ink);font-size:14px;line-height:1.6}
 .muted{color:var(--ink-soft)}
 
 /* timeline */

@@ -197,6 +197,20 @@ export interface VerificationResult {
   walletAddress: string | null; // provisioned on verification
 }
 
+// A managed party (customer) in the platform — company or freelancer.
+export interface CustomerSummary {
+  id: string;
+  role: Role;
+  name: string;
+  email: string;
+  country: string;
+  status: KycStatus; // KYC (freelancer) or KYB (company); 'VERIFIED' for admins
+  verified: boolean;
+  walletAddress: string | null;
+  createdAt: string;
+  paymentsCount?: number;
+}
+
 // A freelancer's payout destination — where the off-ramped fiat actually lands.
 // A payment cannot settle to a payee with no active account for the dst currency.
 export interface PayoutAccount {

@@ -12,11 +12,20 @@ import { raiseAlertsFromRules } from '../alerts/alert.service.js';
 import { markInvoicePaidByPayment } from '../invoices/invoice.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import { hasActivePayoutAccount } from '../payouts/payout-account.service.js';
+import { adjudicate, resolveAction } from '../agent/adjudicator.js';
+import { env } from '../../lib/env.js';
 import type { PaymentState, Role } from '@gigbridge/shared';
 import type { CreatePaymentInput } from '@gigbridge/shared';
 
 function pairOf(src: string, dst: string): string {
   return `${src}${dst}`;
+}
+
+// Rough src-minor → USD-minor, only for the adjudicator's value ceiling. Not a
+// settlement rate; approximate fixed factors are fine here.
+function toUsdMinorApprox(amountMinor: number, ccy: string): number {
+  const perUsd: Record<string, number> = { USD: 1, EUR: 1.08, INR: 1 / 83 };
+  return Math.round(amountMinor * (perUsd[ccy] ?? 1));
 }
 
 // Who is asking. Every public entry point takes one so the payment module scopes
@@ -169,6 +178,36 @@ export async function createPayment(companyId: string, input: CreatePaymentInput
   });
   if (outcome.verdict === 'FLAG') {
     await transition(payment.id, 'FLAGGED', { actor: 'agent', extra: { verdict: outcome.verdict } });
+    // AI adjudication: triage the flag so a human only sees genuine exceptions.
+    if (env.AI_ADJUDICATION) {
+      try {
+        const company = await prisma.user.findUniqueOrThrow({ where: { id: companyId } });
+        const adj = await adjudicate({
+          ruleResults: outcome.ruleResults,
+          facts: {
+            payerName: company.name,
+            payeeName: payee.name,
+            payeeCountry: payee.country,
+            amount: `${input.srcCurrency} ${(input.srcAmountMinor / 100).toFixed(2)}`,
+            amountUsdMinor: toUsdMinorApprox(input.srcAmountMinor, input.srcCurrency),
+            purposeCode: input.purposeCode ?? null,
+          },
+        });
+        const act = resolveAction(adj);
+        await prisma.complianceDecision.update({
+          where: { id: decision.id },
+          data: { reviewedBy: `ai:${adj.by}`, reviewNote: `[${act} · ${(adj.confidence * 100) | 0}% confidence] ${adj.rationale}` },
+        });
+        if (act === 'AUTO_CLEAR') {
+          await transition(payment.id, 'COMPLIANCE_CHECK', { actor: 'ai-adjudicator', timelineKey: 'COMPLIANCE_APPROVED', extra: { aiAdjudication: act, confidence: adj.confidence } });
+        } else if (act === 'AUTO_REJECT') {
+          await transition(payment.id, 'REJECTED', { actor: 'ai-adjudicator', extra: { aiAdjudication: act, confidence: adj.confidence } });
+        } // ESCALATE: stays FLAGGED for the human officer queue.
+        await audit('ai-adjudicator', `PAYMENT_ADJUDICATED_${act}`, `payment:${payment.id}`, null, { confidence: adj.confidence, by: adj.by });
+      } catch {
+        /* any failure: leave FLAGGED for a human — never auto-act on error */
+      }
+    }
   } else if (outcome.verdict === 'REJECT') {
     await transition(payment.id, 'REJECTED', { actor: 'agent', extra: { verdict: outcome.verdict } });
   }

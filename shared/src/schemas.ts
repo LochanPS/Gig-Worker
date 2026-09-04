@@ -93,6 +93,24 @@ export const createScheduleSchema = z.object({
 });
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 
+// --- Customer management (create + manage the parties in the platform) ---
+export const createCustomerSchema = z.object({
+  role: z.enum(['COMPANY', 'FREELANCER']),
+  name: z.string().min(1),
+  email: z.string().email(),
+  country: z.string().length(2),
+  phone: z.string().optional(),
+  password: z.string().min(6).optional(), // defaults to a generated one if omitted
+  // company
+  legalName: z.string().optional(),
+  regNumber: z.string().optional(),
+  // freelancer
+  panOrTaxId: z.string().optional(),
+  // when true, provision wallet + issue credential + mark verified immediately
+  verified: z.boolean().optional(),
+});
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
+
 export const resolveQueueSchema = z.object({
   action: z.enum(['APPROVE', 'REJECT']),
   note: z.string().min(1),

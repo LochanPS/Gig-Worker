@@ -14,6 +14,7 @@ import PayoutAccounts from './pages/freelancer/PayoutAccounts.js';
 import AdminMonitor from './pages/admin/Monitor.js';
 import PaymentDetail from './pages/PaymentDetail.js';
 import Verify from './pages/Verify.js';
+import Customers from './pages/Customers.js';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/company/schedules" element={<Schedules />} />
           <Route path="/company/invoices" element={<CompanyInvoices />} />
           <Route path="/company/payments/:id" element={<PaymentDetail backTo="/company" />} />
+          <Route path="/customers" element={<Customers />} />
           <Route path="/verify" element={<Verify />} />
         </>}
         {user.role === 'FREELANCER' && <>
@@ -40,7 +42,10 @@ export default function App() {
           <Route path="/me/payments/:id" element={<PaymentDetail backTo="/me" />} />
           <Route path="/verify" element={<Verify />} />
         </>}
-        {user.role === 'ADMIN' && <Route path="/admin" element={<AdminMonitor />} />}
+        {user.role === 'ADMIN' && <>
+          <Route path="/admin" element={<AdminMonitor />} />
+          <Route path="/customers" element={<Customers />} />
+        </>}
         <Route path="*" element={<Navigate to={home} replace />} />
       </Routes>
     </Layout>
