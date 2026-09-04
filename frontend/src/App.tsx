@@ -5,11 +5,14 @@ import Login from './pages/Login.js';
 import Layout from './components/Layout.js';
 import CompanyOverview from './pages/company/Overview.js';
 import NewPayout from './pages/company/NewPayout.js';
+import PayRunPage from './pages/company/PayRun.js';
+import Schedules from './pages/company/Schedules.js';
 import CompanyInvoices from './pages/company/Invoices.js';
 import FreelancerHome from './pages/freelancer/Home.js';
 import FreelancerInvoices from './pages/freelancer/Invoices.js';
 import AdminMonitor from './pages/admin/Monitor.js';
 import PaymentDetail from './pages/PaymentDetail.js';
+import Verify from './pages/Verify.js';
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -23,13 +26,17 @@ export default function App() {
         {user.role === 'COMPANY' && <>
           <Route path="/company" element={<CompanyOverview />} />
           <Route path="/company/pay" element={<NewPayout />} />
+          <Route path="/company/batch" element={<PayRunPage />} />
+          <Route path="/company/schedules" element={<Schedules />} />
           <Route path="/company/invoices" element={<CompanyInvoices />} />
           <Route path="/company/payments/:id" element={<PaymentDetail backTo="/company" />} />
+          <Route path="/verify" element={<Verify />} />
         </>}
         {user.role === 'FREELANCER' && <>
           <Route path="/me" element={<FreelancerHome />} />
           <Route path="/me/invoices" element={<FreelancerInvoices />} />
           <Route path="/me/payments/:id" element={<PaymentDetail backTo="/me" />} />
+          <Route path="/verify" element={<Verify />} />
         </>}
         {user.role === 'ADMIN' && <Route path="/admin" element={<AdminMonitor />} />}
         <Route path="*" element={<Navigate to={home} replace />} />

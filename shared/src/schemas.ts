@@ -1,6 +1,6 @@
 // Zod request/response schemas — the wire contract (BUILD_CONTRACTS §4).
 import { z } from 'zod';
-import { ROLES, CURRENCIES, PURPOSE_CODES } from './enums.js';
+import { ROLES, CURRENCIES, PURPOSE_CODES, CADENCES } from './enums.js';
 
 export const registerSchema = z.object({
   email: z.string().email(),
@@ -55,6 +55,37 @@ export const createInvoiceSchema = z.object({
   memo: z.string().min(1),
 });
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
+
+// --- Batch pay-run (FR-2.5): pay N freelancers in one action ---
+// One line item per payee. The whole run goes through the SAME orchestrator
+// (one compliance evaluation per child payment), then approved children confirm
+// together. Items reuse the single-payment field shape.
+export const payRunItemSchema = z.object({
+  payeeId: z.string().uuid(),
+  srcCurrency: z.enum(CURRENCIES),
+  dstCurrency: z.enum(CURRENCIES),
+  srcAmountMinor: z.number().int().positive(),
+  purposeCode: z.enum(PURPOSE_CODES),
+});
+export type PayRunItemInput = z.infer<typeof payRunItemSchema>;
+
+export const createPayRunSchema = z.object({
+  note: z.string().optional(),
+  items: z.array(payRunItemSchema).min(1).max(50),
+});
+export type CreatePayRunInput = z.infer<typeof createPayRunSchema>;
+
+// --- Recurring payouts (retainers): schedule a repeating payment ---
+export const createScheduleSchema = z.object({
+  payeeId: z.string().uuid(),
+  srcCurrency: z.enum(CURRENCIES),
+  dstCurrency: z.enum(CURRENCIES),
+  srcAmountMinor: z.number().int().positive(),
+  purposeCode: z.enum(PURPOSE_CODES),
+  cadence: z.enum(CADENCES),
+  startAt: z.string().datetime().optional(), // ISO; defaults to first cadence period from now
+});
+export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 
 export const resolveQueueSchema = z.object({
   action: z.enum(['APPROVE', 'REJECT']),

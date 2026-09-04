@@ -63,6 +63,20 @@ enum InvoiceStatus {
   PAID
 }
 
+enum PayRunStatus {
+  DRAFT
+  REVIEWED
+  CONFIRMED
+  COMPLETED
+  PARTIAL
+}
+
+enum Cadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
 model User {
   id            String   @id @default(uuid())
   role          Role
@@ -83,6 +97,9 @@ model User {
   paymentsReceived Payment[] @relation("FreelancerPayments")
   invoicesRaised   Invoice[] @relation("FreelancerInvoices")
   invoicesReceived Invoice[] @relation("CompanyInvoices")
+  payRuns          PayRun[]  @relation("CompanyPayRuns")
+  schedulesCreated PayoutSchedule[] @relation("CompanySchedules")
+  schedulesReceived PayoutSchedule[] @relation("FreelancerSchedules")
 }
 
 model CompanyProfile {
@@ -143,6 +160,10 @@ model Payment {
   fxRate               FxRate?       @relation(fields: [fxRateId], references: [id])
   purposeCode          String?
   invoiceRef           String?
+  payRunId             String?
+  payRun               PayRun?       @relation(fields: [payRunId], references: [id])
+  scheduleId           String?
+  schedule             PayoutSchedule? @relation(fields: [scheduleId], references: [id])
   state                PaymentState  @default(DRAFT)
   escrowId             String? // keccak256(uuid) on-chain id
   complianceDecisionId String?
@@ -159,6 +180,48 @@ model Payment {
   @@index([companyId])
   @@index([freelancerId])
   @@index([state])
+  @@index([payRunId])
+  @@index([scheduleId])
+}
+
+// Batch pay-run (FR-2.5): one action pays N freelancers. The run is the parent of
+// N child Payments, each of which flows through the normal orchestrator/state
+// machine. status summarises the children (see shared PayRunStatus).
+model PayRun {
+  id        String       @id @default(uuid())
+  companyId String
+  company   User         @relation("CompanyPayRuns", fields: [companyId], references: [id])
+  status    PayRunStatus @default(DRAFT)
+  note      String?
+  payments  Payment[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([companyId])
+}
+
+// Recurring payout schedule (retainer). runDueSchedules() creates a normal
+// Payment via the orchestrator when nextRunAt passes, then advances nextRunAt.
+model PayoutSchedule {
+  id             String    @id @default(uuid())
+  companyId      String
+  company        User      @relation("CompanySchedules", fields: [companyId], references: [id])
+  freelancerId   String
+  freelancer     User      @relation("FreelancerSchedules", fields: [freelancerId], references: [id])
+  srcCurrency    String
+  dstCurrency    String
+  srcAmountMinor Int
+  purposeCode    String
+  cadence        Cadence
+  active         Boolean   @default(true)
+  nextRunAt      DateTime
+  lastRunAt      DateTime?
+  runCount       Int       @default(0)
+  payments       Payment[]
+  createdAt      DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([active, nextRunAt])
 }
 
 model TimelineStep {

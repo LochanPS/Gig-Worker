@@ -1,6 +1,7 @@
 // Typed API client against the REAL backend (BUILD_CONTRACTS §4). JWT in localStorage.
 import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
+  PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -36,9 +37,29 @@ export const api = {
   // auth
   login: (email: string, password: string) =>
     req<AuthResult>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-  register: (input: { email: string; password: string; role: Role; country: string; name: string }) =>
+  register: (input: { email: string; password: string; role: Role; country: string; name: string; legalName?: string; regNumber?: string; panOrTaxId?: string }) =>
     req<AuthResult>('/auth/register', { method: 'POST', body: JSON.stringify(input) }),
   me: () => req<User>('/auth/me'),
+
+  // verification / onboarding (FR-1)
+  verificationStatus: () => req<VerificationResult>('/verification/me'),
+  submitKyc: (body: { panOrTaxId: string; documentType: string; documentRef: string }) =>
+    req<VerificationResult>('/verification/kyc', { method: 'POST', body: JSON.stringify(body) }),
+  submitKyb: (body: { legalName: string; regNumber: string; country: string }) =>
+    req<VerificationResult>('/verification/kyb', { method: 'POST', body: JSON.stringify(body) }),
+
+  // batch pay-run (FR-2.5)
+  payRuns: () => req<PayRun[]>('/payruns'),
+  payRun: (id: string) => req<PayRun>(`/payruns/${id}`),
+  createPayRun: (body: CreatePayRunInput) => req<PayRun>('/payruns', { method: 'POST', body: JSON.stringify(body) }),
+  confirmPayRun: (id: string) => req<PayRun>(`/payruns/${id}/confirm`, { method: 'POST' }),
+
+  // recurring payouts
+  schedules: () => req<PayoutSchedule[]>('/schedules'),
+  createSchedule: (body: CreateScheduleInput) => req<PayoutSchedule>('/schedules', { method: 'POST', body: JSON.stringify(body) }),
+  pauseSchedule: (id: string) => req<PayoutSchedule>(`/schedules/${id}/pause`, { method: 'POST' }),
+  resumeSchedule: (id: string) => req<PayoutSchedule>(`/schedules/${id}/resume`, { method: 'POST' }),
+  runDueSchedules: () => req<{ ran: number; fired: { scheduleId: string; paymentId: string; verdict: string }[] }>('/schedules/run-due', { method: 'POST' }),
 
   // fx
   quote: (pair: string, amountMinor: number) =>
