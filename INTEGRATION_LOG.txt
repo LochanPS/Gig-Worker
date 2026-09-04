@@ -275,3 +275,53 @@ OPS: backend + frontend Dockerfiles, both wired into infra/docker-compose.yml so
     actions, needs-attention tile, corridor mix). Removed agent-panel left border.
   VERIFIED: shared build; backend typecheck + 109 tests; frontend typecheck + vite
     build — all green. See docs/AI_ADJUDICATION_AND_OPERATIONS.md.
+
+=====================================================================
+2026-09-04 — FRONTEND GAP CLOSURE (CORRIDOR_ROADMAP items 2, 3, 4)
+Mirror of the backend audit: endpoints that existed with no UI consumer.
+
+SHARED (/shared — logged here as roadmap §1 requires):
+  - types.ts: AdjudicationAction, AdjudicationEntry, AdjudicationSummary (AI
+    adjudication metrics); CorridorHolding, Treasury (operator treasury view).
+    Additive. The backend services import these rather than declaring their own,
+    so the wire shape cannot drift between the two sides.
+
+BACKEND:
+  - admin/adjudication.service.ts (new): GET /admin/adjudications. No schema
+    change — the adjudicator already writes AuditLog PAYMENT_ADJUDICATED_<ACTION>
+    and stamps ComplianceDecision.reviewedBy 'ai:*' / reviewNote with the
+    confidence and rationale; this reads those rows back and reports how much of
+    the queue the agent settles without a human.
+  - admin/treasury.service.ts (new): GET /admin/treasury — escrow held per
+    corridor (FUNDED/SETTLING/DISPUTED) and fee revenue on COMPLETED, converted
+    to USD minor through the same FX source quotes use.
+
+FRONTEND:
+  - Notification centre: bell + unread badge + history dropdown + mark read/all,
+    and live toasts. /notifications had NO client method at all — anything not
+    caught live was lost on reload (FR-7.1).
+  - PaymentDetail renders GET /payments/:id/documents instead of hardcoding two
+    buttons and re-deriving availability, so FIRC appears and disabled controls
+    carry the backend's own reason.
+  - /me/identity (new): credential card from /credentials/me — DID, on-chain
+    hash, validity, anchor tx, certificate PDF. Previously unconsumed.
+  - /me/history (new): per-payment effective rate, fee and share kept.
+  - /admin/rules (new) consuming the long-unused api.rules().
+  - /admin/treasury (new).
+  - EXPIRED: chip styling + a PaymentDetail banner. The backend has swept stale
+    rate locks into this state since the last session and the UI rendered it as
+    an unstyled chip explained nowhere.
+
+BUGS FIXED IN THE v2 DASHBOARD:
+  - Monitor multiplied metrics.flaggedPct by 100, but the backend already returns
+    a percentage — 4.2% rendered as 420%.
+  - Monitor's avg-settlement stat fell back to a hardcoded 47 when metrics were
+    absent; it now shows an em dash until real numbers arrive.
+  - Alert details were dumped with JSON.stringify; the message and rule id are
+    rendered as fields.
+  - Monitor now takes metrics.tick off the websocket instead of re-polling.
+  - Freelancer Home showed "You kept 99.25%" as a literal; computed from real fees.
+
+STYLES: the new CSS uses --ink-soft; there is no --muted custom property in this
+  design system (only a .muted class), so var(--muted) would have silently
+  fallen back to inherited colour.
