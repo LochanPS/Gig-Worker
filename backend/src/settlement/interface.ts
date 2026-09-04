@@ -29,4 +29,10 @@ export interface SettlementService {
   anchorDecision(decisionHash: string): Promise<SettlementResult>;
   /** write a credential hash to IdentityRegistry */
   setCredential(address: string, hash: string, expiryUnix: number): Promise<SettlementResult>;
+  /**
+   * Make a payer (company) wallet able to transact: gas + faucet USDC. On-chain
+   * this sends ETH and mints MockUSDC; simulated mode is a no-op. Called at
+   * verification (BUILD_CONTRACTS §2 faucet).
+   */
+  provisionPayer(address: string, usdcMinor: number): Promise<void>;
 }

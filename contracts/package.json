@@ -12,7 +12,8 @@
     "build:sol": "forge build",
     "test:sol": "forge test",
     "export-abis": "node script/export-abis.mjs",
-    "deploy:local": "tsx deploy.ts"
+    "deploy:local": "tsx deploy.ts",
+    "e2e:real": "tsx script/e2e-real-chain.ts"
   },
   "dependencies": {
     "viem": "^2.21.0"

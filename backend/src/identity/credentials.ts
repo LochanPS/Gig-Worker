@@ -5,6 +5,9 @@ import { getSettlement } from "../settlement/index.js";
 import type { CredentialDTO } from "@gigbridge/shared";
 
 const CREDENTIAL_TTL_DAYS = 365;
+// Demo faucet size, in USD minor units (cents): 100,000 USD of MockUSDC minted
+// to every verified company wallet so it can fund escrows.
+const FAUCET_USDC_MINOR = 100_000 * 100;
 
 /**
  * Issues a verifiable credential for a user: builds the VC JSON, encrypts it at
@@ -47,6 +50,12 @@ export async function issueCredential(userId: string, actorId: string): Promise<
     hash,
     Math.floor(expiresAt.getTime() / 1000),
   );
+
+  // Faucet: a verified company becomes a payer, so fund its wallet with gas +
+  // demo USDC (BUILD_CONTRACTS §2). No-op in simulated mode.
+  if (user.role === "COMPANY" && user.walletAddress) {
+    await settlement.provisionPayer(user.walletAddress, FAUCET_USDC_MINOR);
+  }
 
   const cred = await prisma.credential.create({
     data: {

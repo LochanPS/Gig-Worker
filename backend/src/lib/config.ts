@@ -24,10 +24,19 @@ export const config = {
     chainId: num("CHAIN_ID", 31337),
     platformPrivateKey: process.env.PLATFORM_PRIVATE_KEY ?? "",
     deployerPrivateKey: process.env.DEPLOYER_PRIVATE_KEY ?? "",
-    // When no platform key / RPC is available we run settlement in simulated
-    // mode (deterministic fake tx hashes) so the pipeline still completes.
+    treasuryAddress: process.env.TREASURY_ADDRESS ?? "",
+    // Base URL for tx-hash explorer links (empty on local anvil).
+    explorerBaseUrl: process.env.EXPLORER_BASE_URL ?? "",
+    // Real on-chain settlement only when explicitly enabled AND a platform key
+    // is present; otherwise simulated (deterministic fake tx hashes) so the
+    // pipeline still completes offline.
+    get mode(): "real" | "simulated" {
+      return process.env.SETTLEMENT_MODE === "real" && !!process.env.PLATFORM_PRIVATE_KEY
+        ? "real"
+        : "simulated";
+    },
     get simulated(): boolean {
-      return !process.env.PLATFORM_PRIVATE_KEY;
+      return this.mode === "simulated";
     },
   },
 

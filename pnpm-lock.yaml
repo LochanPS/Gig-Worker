@@ -38,6 +38,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.1
         version: 11.3.0
+      '@gigbridge/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@gigbridge/shared':
         specifier: workspace:*
         version: link:../shared

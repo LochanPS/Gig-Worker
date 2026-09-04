@@ -1,6 +1,7 @@
 // Demo seed — BUILD_CONTRACTS.txt section 7 (exact names + logins). Idempotent:
 // wipes GigBridge tables then reseeds. Safe to run repeatedly.
 import { prisma } from "../lib/db.js";
+import { config } from "../lib/config.js";
 import { hashPassword } from "../auth/password.js";
 import { generateDemoWallet } from "../settlement/wallets.js";
 import { issueCredential } from "../identity/credentials.js";
@@ -70,6 +71,20 @@ async function makeFreelancer(
 
 export async function seed(): Promise<void> {
   console.log("Seeding GigBridge demo data...");
+
+  // Real settlement mode issues on-chain credentials + faucets during seeding,
+  // so the contracts must exist first. ensureDeployed() is a no-op if they do.
+  if (config.chain.mode === "real") {
+    const { ensureDeployed } = await import("@gigbridge/contracts");
+    await ensureDeployed({
+      rpcUrl: config.chain.rpcUrl,
+      chainId: config.chain.chainId,
+      deployerKey: config.chain.deployerPrivateKey || config.chain.platformPrivateKey || undefined,
+      treasury: config.chain.treasuryAddress || undefined,
+    });
+    console.log("  contracts deployed for real-settlement seed");
+  }
+
   await wipe();
 
   const admin = await prisma.user.create({

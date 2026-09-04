@@ -29,4 +29,7 @@ export class SimulatedSettlement implements SettlementService {
   async setCredential(address: string, hash: string, expiryUnix: number): Promise<SettlementResult> {
     return { txHash: fakeTxHash("credential", address, hash, String(expiryUnix)) };
   }
+  async provisionPayer(_address: string, _usdcMinor: number): Promise<void> {
+    // No chain to fund in simulated mode.
+  }
 }
