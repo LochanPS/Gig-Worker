@@ -4,6 +4,7 @@ import { ParentSize } from "@visx/responsive";
 import type { Transition } from "motion/react";
 import {
   Children,
+  type CSSProperties,
   isValidElement,
   type ReactElement,
   type ReactNode,
@@ -30,6 +31,7 @@ export interface ComposedChartProps {
   /** Signature of motion URL state - triggers reveal replay when it changes. */
   revealSignature?: string;
   aspectRatio?: string;
+  style?: CSSProperties;
   className?: string;
   children: ReactNode;
   /** Target bar width in px (Recharts-style `barSize`). */
@@ -287,6 +289,7 @@ export function ComposedChart({
   enterTransition,
   revealSignature,
   aspectRatio = "2 / 1",
+  style,
   className = "",
   children,
   barSize,
@@ -303,7 +306,7 @@ export function ComposedChart({
     <div
       className={cn("relative w-full", className)}
       ref={containerRef}
-      style={{ aspectRatio, touchAction: "none" }}
+      style={{ aspectRatio, touchAction: "none", ...style }}
     >
       <ParentSize debounceTime={10}>
         {({ width, height }) => (

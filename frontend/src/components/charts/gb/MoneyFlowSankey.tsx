@@ -1,4 +1,4 @@
-import { SankeyChart, SankeyNode, SankeyLink, type SankeyData } from '../sankey';
+import { SankeyChart, SankeyNode, SankeyLink, SankeyTooltip, type SankeyData } from '../sankey';
 
 // The pitch's centrepiece: euros entering, converting to stablecoin, landing as rupees,
 // with the thin platform-fee branch visible. Values are relative volume units.
@@ -33,6 +33,7 @@ export function MoneyFlowSankey({
       <SankeyChart data={data} aspectRatio="5 / 2" nodePadding={28} nodeWidth={14}>
         <SankeyLink useGradient />
         <SankeyNode getNodeColor={(n) => color(n.name)} />
+        <SankeyTooltip formatValue={(v) => `${v.toLocaleString('en-US', { maximumFractionDigits: 1 })} units`} />
       </SankeyChart>
     </div>
   );

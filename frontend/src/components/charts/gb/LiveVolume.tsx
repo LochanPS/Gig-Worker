@@ -4,6 +4,7 @@ import { LiveLine } from '../live-line';
 import { LiveXAxis } from '../live-x-axis';
 import { LiveYAxis } from '../live-y-axis';
 import { Grid } from '../grid';
+import { ChartTooltip } from '../tooltip/chart-tooltip';
 
 // Streaming settlement volume. Value interpolates toward the latest tick, never snaps.
 export function LiveVolume({
@@ -23,6 +24,10 @@ export function LiveVolume({
         <LiveYAxis />
         <LiveXAxis />
         <LiveLine dataKey="value" stroke="var(--chart-1)" />
+        <ChartTooltip
+          showDatePill={false}
+          rows={(p) => [{ color: 'var(--chart-1)', label: 'Volume', value: Number(p.value ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 }) }]}
+        />
       </LiveLineChart>
     </div>
   );
