@@ -28,6 +28,10 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   SCHEDULES_TICK_SECONDS: z.coerce.number().default(60),
+  // Operator heartbeat: how often metrics.tick goes out to connected admins
+  // (BUILD_CONTRACTS §5 says every 5s) and how often stale rate locks are swept.
+  METRICS_TICK_SECONDS: z.coerce.number().default(5),
+  RATE_LOCK_SWEEP_SECONDS: z.coerce.number().default(60),
 });
 
 export const env = envSchema.parse(process.env);

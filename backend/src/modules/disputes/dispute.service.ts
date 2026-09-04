@@ -5,8 +5,9 @@
 import type { RaiseDisputeInput, Role } from '@gigbridge/shared';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
-import { emitToUser, emitToAdmins } from '../../lib/ws.js';
+import { emitToAdmins } from '../../lib/ws.js';
 import { holdForDispute, reverseDisputed, dismissDisputed } from '../payments/payment.service.js';
+import { notify } from '../notifications/notification.service.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serialize(d: any) {
@@ -79,10 +80,3 @@ export async function listDisputes(userId: string, role: Role) {
   return rows.map(serialize);
 }
 
-async function notify(userId: string, kind: string, message: string) {
-  const n = await prisma.notification.create({ data: { userId, kind, message } });
-  emitToUser(userId, {
-    type: 'notification.new',
-    notification: { id: n.id, userId, kind, message, read: false, createdAt: n.createdAt.toISOString() },
-  });
-}

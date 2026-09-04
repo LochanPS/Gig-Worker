@@ -39,6 +39,20 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
     finally { setBusy(false); }
   };
 
+  const releaseEscrow = async () => {
+    setErr(''); setMsg(''); setBusy(true);
+    try { await api.releasePayment(id); setMsg('Work approved — escrow released to the payee.'); await load(); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const refundEscrow = async () => {
+    setErr(''); setMsg(''); setBusy(true);
+    try { await api.refundPayment(id); setMsg('Escrow refunded to the payer.'); await load(); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   if (!p) return <div className="muted">Loading…</div>;
   const isParty = user?.id === p.companyId || user?.id === p.freelancerId;
   const isCompany = user?.role === 'COMPANY';
@@ -75,6 +89,7 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Net received</span><span className="v">{money(p.dstAmountMinor, p.dstCurrency)}</span>
             <span className="k">Purpose</span><span className="v">{p.purposeCode ?? '—'}</span>
             <span className="k">Escrow</span><span className="v mono">{p.escrowId ? p.escrowId.slice(0, 16) + '…' : '—'}</span>
+            <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
           </div>
           <div className="docbtns">
             <button className="btn ghost" onClick={() => openDoc('receipt')} disabled={p.state !== 'COMPLETED'}>Receipt</button>
@@ -92,6 +107,23 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             Once they add one, retry.
           </p>
           {isCompany && <button className="btn" onClick={retryPayout} disabled={busy}>{busy ? 'Retrying…' : 'Retry payout'}</button>}
+        </div>
+      )}
+
+      {/* FR-2.2: a held escrow is funded but waiting on the company's approval. */}
+      {p.state === 'FUNDED' && p.escrowMode === 'HOLD' && (
+        <div className="card" style={{ marginTop: 18, borderLeft: '3px solid var(--flag, #d97706)' }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Escrow funded — awaiting work approval</h2>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            The money is locked in escrow on-chain. Releasing it pays the freelancer; refunding
+            returns it to you.
+          </p>
+          {isCompany && (
+            <div className="row">
+              <button className="btn" onClick={releaseEscrow} disabled={busy}>{busy ? 'Releasing…' : 'Approve work & release'}</button>
+              <button className="btn ghost" onClick={refundEscrow} disabled={busy}>Refund</button>
+            </div>
+          )}
         </div>
       )}
 

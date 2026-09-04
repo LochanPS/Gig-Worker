@@ -201,3 +201,58 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   VERIFIED: shared build clean; backend typecheck + 56 tests green (was 45, +11);
     frontend typecheck + vite production build clean. Migration additive, not yet
     applied to any live DB (prisma migrate deploy at hosting time).
+
+=====================================================================
+2026-09-04 — BACKEND GAP CLOSURE (branch claude/backend-repo-analysis-rwvtei)
+Ten gaps found by auditing the live backend on main against PRD/TRD/BUILD_CONTRACTS.
+
+SHARED (/shared — interface treaty, changes logged here as §1 requires):
+  - enums.ts: ESCROW_MODES / EscrowMode = 'INSTANT' | 'HOLD' (new, additive).
+  - schemas.ts: createPaymentSchema += escrowMode (optional, defaults INSTANT).
+    CreatePaymentInput is now z.input<> rather than z.infer<> so callers that
+    build the input by hand may omit the defaulted field; a parsed request body
+    still satisfies it. No existing caller changes.
+  - types.ts: Payment += escrowMode; new FreelancerSummary (roster wire shape).
+
+BUILD_CONTRACTS §4 DEVIATION, RESOLVED (not a contract change):
+  The contract freezes POST /kyc/submit, POST /kyb/submit and
+  POST /admin/verify/:userId. The live backend had grown /verification/kyc,
+  /verification/kyb and /verification/me instead, and no admin-verify path at
+  all. All three frozen paths are now served by the same handlers; the
+  /verification/* paths stay, so neither the contract nor existing consumers
+  move. POST /admin/verify/:userId issues the credential + on-chain hash through
+  the same provision() the self-serve flow uses.
+
+BACKEND:
+  - payments: Actor ({id, role}) on every public entry point, with assertParty
+    (read: payer, payee or admin) and assertPayer (write: paying company or
+    admin). getPayment() previously took a requesterId and ignored it, and
+    confirm/retry/release/refund never checked ownership. Split into checked
+    getPayment() and internal getPaymentInternal() for pre-authorized callers.
+  - documents: receipt/compliance/firc/descriptor get the same party check.
+  - admin module (new): GET /admin/metrics (was mock-only; the frontend has
+    always called it), POST /admin/expire-locks.
+  - RATE_LOCKED -> EXPIRED now actually happens (timer + endpoint). It was
+    declared in the state machine from the start and never produced.
+  - metrics.tick broadcast to admins every 5s (BUILD_CONTRACTS §5), skipped when
+    no admin is connected.
+  - notifications module (new): GET /notifications, /unread-count,
+    POST /:id/read, /read-all. The duplicated notify() helpers in verification
+    and disputes now call the one shared write path.
+  - directory module (new): GET /directory/freelancers — the roster the payout
+    wizard needs (it shipped three hardcoded seed UUIDs).
+  - createPayment validates the payee (must be a FREELANCER, must be VERIFIED)
+    before writing a payment or a compliance decision.
+  - escrowMode HOLD stops confirm at FUNDED; release-on-work-approval settles it
+    (FR-2.2). Migration 20260904140000_escrow_mode (new enum + defaulted column;
+    additive, existing rows read INSTANT).
+  - env: METRICS_TICK_SECONDS (5), RATE_LOCK_SWEEP_SECONDS (60).
+
+FRONTEND: api client gains freelancers(), releasePayment(), refundPayment();
+  NewPayout loads the live roster and offers the escrow choice; PaymentDetail
+  gains the approve-and-release / refund panel for a held escrow.
+
+OPS: backend + frontend Dockerfiles, both wired into infra/docker-compose.yml so
+  `docker compose up` boots the whole stack (NFR-4); root eslint + prettier
+  config (pnpm lint could not run at all before); GitHub Actions CI running
+  typecheck, tests and lint.

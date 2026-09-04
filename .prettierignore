@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+pnpm-lock.yaml
+contracts/lib
+contracts/out
+variants
+shared/abis

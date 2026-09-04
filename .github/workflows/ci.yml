@@ -1,0 +1,45 @@
+# Typecheck, test and lint the workspace on every push and PR. No database is
+# needed: the backend suites are deliberately DB-free (pure state machine, rule
+# engine, mappers and schemas), so this runs in well under a minute.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # shared is consumed from source, but its build is what surfaces a broken
+      # interface treaty before the consumers do.
+      - name: Build shared
+        run: pnpm --filter @gigbridge/shared build
+
+      # The Prisma client is generated, not committed — backend typecheck needs it.
+      - name: Generate Prisma client
+        run: pnpm --filter ./backend prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Lint
+        run: pnpm lint

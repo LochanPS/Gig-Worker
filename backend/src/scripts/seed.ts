@@ -28,7 +28,12 @@ const USERS: SeedUser[] = [
   { id: '44444444-4444-4444-4444-444444444444', role: 'FREELANCER', email: 'alex@demo.gg', name: 'Alex Carter', country: 'US', pan: 'US-TIN-88123', verified: true },
   { id: '55555555-5555-5555-5555-555555555555', role: 'FREELANCER', email: 'uma@demo.gg', name: 'Uma Rao', country: 'IN', pan: null, verified: false },
   // Sanctioned counterparty for scenario 2 (name matches the mock watchlist).
-  { id: '66666666-6666-6666-6666-666666666666', role: 'FREELANCER', email: 'sanctioned@demo.gg', name: 'SanctionedCo', country: 'IN', pan: null, verified: false },
+  // Deliberately VERIFIED: this models a party added to the SDN list AFTER being
+  // onboarded, which is exactly why screening happens per payment and not only at
+  // KYC. It also keeps the scenario honest now that a payment to an unverified
+  // payee is refused up front — the REJECT must come from US-OFAC-001 with the
+  // agent's reasoning, not from a missing KYC.
+  { id: '66666666-6666-6666-6666-666666666666', role: 'FREELANCER', email: 'sanctioned@demo.gg', name: 'SanctionedCo', country: 'IN', pan: 'SANC0001X', verified: true },
   { id: '99999999-9999-9999-9999-999999999999', role: 'ADMIN', email: 'admin@demo.gg', name: 'Platform Admin', country: 'IN', verified: true },
 ];
 
@@ -101,8 +106,29 @@ async function seedHistoricalPayment(companyId: string, freelancerId: string, da
       createdAt: created,
     },
   });
+  // Historical payments used to record CREATED and RELEASED at the SAME instant,
+  // which made every settlement duration zero — so the operator dashboard's
+  // average settlement time, the metric that carries the whole "minutes, not 3-5
+  // days" claim, read 0s. Spread them over a plausible 25-70s instead, and record
+  // the credited step so the metric measures the full journey to the payee.
+  const settleSeconds = 25 + Math.round(Math.random() * 45);
+  const released = new Date(created.getTime() + settleSeconds * 1000);
+  const credited = new Date(released.getTime() + 2000);
   await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'CREATED', label: 'Payment created', state: 'DRAFT', actor: companyId, at: created } });
-  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'RELEASED', label: 'Released to payee', state: 'COMPLETED', actor: 'platform', at: created } });
+  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'RELEASED', label: 'Released to payee', state: 'COMPLETED', actor: 'platform', at: released } });
+  await prisma.timelineStep.create({ data: { paymentId: p.id, key: 'CREDITED', label: 'Payee credited', state: 'COMPLETED', actor: 'off-ramp', at: credited } });
+
+  // A cleared compliance decision per historical payment. Without these the
+  // flagged-rate metric was computed over a single row.
+  await prisma.complianceDecision.create({
+    data: {
+      paymentId: p.id,
+      verdict: 'APPROVE',
+      ruleResults: [] as never,
+      agentExplanation: 'Cleared on all applicable rules for this corridor (historical record).',
+      createdAt: created,
+    },
+  });
 }
 
 async function main() {

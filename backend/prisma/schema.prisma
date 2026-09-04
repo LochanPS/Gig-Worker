@@ -80,6 +80,13 @@ enum PayRunStatus {
   PARTIAL
 }
 
+// How the escrow behaves once funded (FR-2.2). INSTANT settles straight through;
+// HOLD funds at gig start and waits for the company to approve the work.
+enum EscrowMode {
+  INSTANT
+  HOLD
+}
+
 enum Cadence {
   WEEKLY
   BIWEEKLY
@@ -178,6 +185,7 @@ model Payment {
   schedule             PayoutSchedule? @relation(fields: [scheduleId], references: [id])
   state                PaymentState  @default(DRAFT)
   escrowId             String? // keccak256(uuid) on-chain id
+  escrowMode           EscrowMode    @default(INSTANT)
   complianceDecisionId String?
   txHashFund           String?
   txHashRelease        String?

@@ -1,6 +1,6 @@
 // Zod request/response schemas — the wire contract (BUILD_CONTRACTS §4).
 import { z } from 'zod';
-import { ROLES, CURRENCIES, PURPOSE_CODES, CADENCES } from './enums.js';
+import { ROLES, CURRENCIES, PURPOSE_CODES, ESCROW_MODES, CADENCES } from './enums.js';
 
 export const registerSchema = z.object({
   email: z.string().email(),
@@ -41,8 +41,14 @@ export const createPaymentSchema = z.object({
   srcAmountMinor: z.number().int().positive(),
   purposeCode: z.enum(PURPOSE_CODES),
   invoiceRef: z.string().optional(),
+  // FR-2.2. Optional and INSTANT by default, so every existing caller keeps the
+  // one-click settle-through behaviour unchanged.
+  escrowMode: z.enum(ESCROW_MODES).optional().default('INSTANT'),
 });
-export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+// z.input, not z.infer: escrowMode has a default, so callers that build the input
+// by hand (the pay-run fan-out, the schedule runner) may omit it, while a parsed
+// request body — where it is always present — still satisfies the type.
+export type CreatePaymentInput = z.input<typeof createPaymentSchema>;
 
 export const confirmPaymentSchema = z.object({
   quoteId: z.string().uuid(),

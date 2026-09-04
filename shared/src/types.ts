@@ -10,6 +10,7 @@ import type {
   AlertSeverity,
   Currency,
   PurposeCode,
+  EscrowMode,
   PayRunStatus,
   Cadence,
   DisputeStatus,
@@ -77,6 +78,7 @@ export interface Payment {
   invoiceRef: string | null;
   state: PaymentState;
   escrowId: string | null; // keccak256(uuid), the on-chain id
+  escrowMode: EscrowMode; // INSTANT settles through; HOLD waits for work approval
   complianceDecisionId: string | null;
   txHashFund: string | null;
   txHashRelease: string | null;
@@ -239,4 +241,18 @@ export interface PaymentDocument {
   url: string; // ready-to-fetch API path, e.g. /api/v1/payments/<id>/firc.pdf
   available: boolean;
   reason?: string; // why it is not yet available (for a disabled control's tooltip)
+}
+
+// A payable freelancer, as the company's roster and the payout wizard's payee
+// picker see them (FR-6.1). payoutCurrencies lists the currencies they have an
+// active payout account in — a payment to a currency not in this list will land
+// in PAYOUT_FAILED, so the UI can warn before the company confirms.
+export interface FreelancerSummary {
+  id: string;
+  name: string;
+  country: string;
+  kycStatus: KycStatus;
+  walletAddress: string | null;
+  payoutCurrencies: Currency[];
+  payable: boolean; // verified AND has at least one active payout account
 }

@@ -11,9 +11,9 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
-import { emitToUser } from '../../lib/ws.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
+import { notify } from '../notifications/notification.service.js';
 import { isSanctioned } from '../compliance/rules/sanctions.js';
 import type { VerificationResult } from '@gigbridge/shared';
 
@@ -32,7 +32,7 @@ function rejectionReason(name: string, taxId: string, documentRef: string): stri
 
 // Provision a custodial demo wallet (idempotent) + issue an on-chain-anchored
 // credential (idempotent per user). Returns the credential hash + wallet address.
-async function provision(userId: string, name: string): Promise<{ hash: string; walletAddress: string }> {
+export async function provision(userId: string, name: string): Promise<{ hash: string; walletAddress: string }> {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   let walletAddress = user.walletAddress;
   if (!walletAddress) {
@@ -63,13 +63,6 @@ async function provision(userId: string, name: string): Promise<{ hash: string; 
   return { hash, walletAddress };
 }
 
-async function notify(userId: string, kind: string, message: string) {
-  const n = await prisma.notification.create({ data: { userId, kind, message } });
-  emitToUser(userId, {
-    type: 'notification.new',
-    notification: { id: n.id, userId, kind, message, read: false, createdAt: n.createdAt.toISOString() },
-  });
-}
 
 export async function submitKyc(
   freelancerId: string,
@@ -137,4 +130,30 @@ export async function getVerificationStatus(userId: string): Promise<Verificatio
     credentialHash: user.credentials[0]?.hash ?? null,
     walletAddress: user.walletAddress,
   };
+}
+
+// Admin verification (BUILD_CONTRACTS §4: POST /admin/verify/:userId). The
+// operator marks a party verified out of band — the same provision-and-issue path
+// the self-serve flow uses, so a credential issued either way is identical.
+export async function adminVerify(userId: string, adminId: string): Promise<VerificationResult> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: { company: true, freelancer: true },
+  });
+  if (user.role === 'ADMIN') {
+    throw Object.assign(new Error('Admins do not hold a KYC/KYB credential'), { statusCode: 400 });
+  }
+
+  const name = user.company?.legalName ?? user.freelancer?.fullName ?? user.name;
+  const { hash, walletAddress } = await provision(userId, name);
+
+  if (user.company) {
+    await prisma.companyProfile.update({ where: { userId }, data: { kybStatus: 'VERIFIED' } });
+  } else {
+    await prisma.freelancerProfile.update({ where: { userId }, data: { kycStatus: 'VERIFIED' } });
+  }
+
+  await audit(adminId, user.company ? 'ADMIN_KYB_VERIFIED' : 'ADMIN_KYC_VERIFIED', `user:${userId}`, null, { by: adminId });
+  await notify(userId, 'VERIFIED', 'Your account was verified by the platform operator.');
+  return { userId, status: 'VERIFIED', reason: null, credentialHash: hash, walletAddress };
 }
