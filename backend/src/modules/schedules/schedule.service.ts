@@ -8,7 +8,7 @@ import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
 import { emitToUser } from '../../lib/ws.js';
 import { createQuote } from '../fx/fx.service.js';
-import { createPayment, confirmPayment } from '../payments/payment.service.js';
+import { createPayment, confirmPayment , type Actor } from '../payments/payment.service.js';
 
 const DAY_MS = 86_400_000;
 
@@ -88,7 +88,7 @@ async function fireOnce(scheduleId: string): Promise<{ paymentId: string; verdic
   if (verdict === 'APPROVE') {
     // Fresh quote (the one from createPayment may be near expiry) then settle.
     const quote = await createQuote(`${s.srcCurrency}${s.dstCurrency}`, s.srcAmountMinor);
-    await confirmPayment(result.payment.id, s.companyId, quote.quoteId);
+    await confirmPayment(result.payment.id, { id: s.companyId, role: 'COMPANY' } satisfies Actor, quote.quoteId);
   }
 
   await prisma.payoutSchedule.update({

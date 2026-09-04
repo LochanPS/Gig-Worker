@@ -12,11 +12,38 @@ import { raiseAlertsFromRules } from '../alerts/alert.service.js';
 import { markInvoicePaidByPayment } from '../invoices/invoice.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import { hasActivePayoutAccount } from '../payouts/payout-account.service.js';
-import type { PaymentState } from '@gigbridge/shared';
+import type { PaymentState, Role } from '@gigbridge/shared';
 import type { CreatePaymentInput } from '@gigbridge/shared';
 
 function pairOf(src: string, dst: string): string {
   return `${src}${dst}`;
+}
+
+// Who is asking. Every public entry point takes one so the payment module scopes
+// its reads and writes the way the rest of the backend already does (invoices,
+// pay-runs, schedules, payout accounts, disputes all check ownership).
+export interface Actor {
+  id: string;
+  role: Role;
+}
+
+const forbidden = (msg: string) => Object.assign(new Error(msg), { statusCode: 403 });
+
+// Read access: an admin sees everything; otherwise the caller must be the payer
+// or the payee on this payment.
+export function assertParty(p: { companyId: string; freelancerId: string }, actor: Actor): void {
+  if (actor.role === 'ADMIN') return;
+  if (p.companyId !== actor.id && p.freelancerId !== actor.id) {
+    throw forbidden('Not a party to this payment');
+  }
+}
+
+// Write access: an admin may act on any payment; otherwise only the paying
+// company may confirm, retry, release or refund it. A payee is a party (they can
+// read it) but must never be able to move their own money.
+export function assertPayer(p: { companyId: string }, actor: Actor): void {
+  if (actor.role === 'ADMIN') return;
+  if (p.companyId !== actor.id) throw forbidden('Only the paying company can act on this payment');
 }
 
 // Advance a payment to a new state: persist, append the timeline step, audit,
@@ -129,16 +156,18 @@ export async function createPayment(companyId: string, input: CreatePaymentInput
   }
 
   const quote = await createQuote(pairOf(input.srcCurrency, input.dstCurrency), input.srcAmountMinor);
-  return { payment: await getPayment(payment.id, companyId), quote, decision, payeeWallet: payee.walletAddress };
+  return { payment: await getPaymentInternal(payment.id), quote, decision, payeeWallet: payee.walletAddress };
 }
 
 // 2. Confirm: validate the locked quote, move to RATE_LOCKED -> FUNDED (on-chain),
 //    then auto SETTLING -> COMPLETED.
-export async function confirmPayment(paymentId: string, actorId: string, quoteId: string) {
+export async function confirmPayment(paymentId: string, actor: Actor, quoteId: string) {
+  const actorId = actor.id;
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id: paymentId },
     include: { freelancer: true, decision: true },
   });
+  assertPayer(p, actor);
   if (p.state !== 'COMPLIANCE_CHECK' && p.state !== 'FLAGGED') {
     throw Object.assign(new Error(`Cannot confirm a payment in state ${p.state}`), { statusCode: 409 });
   }
@@ -164,7 +193,7 @@ export async function confirmPayment(paymentId: string, actorId: string, quoteId
       actor: 'system',
       extra: { reason: `Payee has no active ${p.dstCurrency} payout account.` },
     });
-    return getPayment(paymentId, actorId);
+    return getPaymentInternal(paymentId);
   }
 
   // Fund escrow on-chain (simulated until P1 swaps in real settlement).
@@ -186,13 +215,15 @@ export async function confirmPayment(paymentId: string, actorId: string, quoteId
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
   await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
 
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
 // Retry a payout that failed for lack of a destination account. Re-checks the
 // gate, then funds + settles. Needs a fresh quote (the old lock is gone).
-export async function retryPayout(paymentId: string, actorId: string, quoteId: string) {
+export async function retryPayout(paymentId: string, actor: Actor, quoteId: string) {
+  const actorId = actor.id;
   const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId }, include: { freelancer: true, decision: true } });
+  assertPayer(p, actor);
   if (p.state !== 'PAYOUT_FAILED') {
     throw Object.assign(new Error(`Only a PAYOUT_FAILED payment can be retried (state ${p.state})`), { statusCode: 409 });
   }
@@ -212,11 +243,13 @@ export async function retryPayout(paymentId: string, actorId: string, quoteId: s
   await transition(paymentId, 'COMPLETED', { actor: 'platform', timelineKey: 'RELEASED', txHash: released.txHash });
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
   await markInvoicePaidByPayment(paymentId);
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
-export async function releasePayment(paymentId: string, actorId: string) {
+export async function releasePayment(paymentId: string, actor: Actor) {
+  const actorId = actor.id;
   const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  assertPayer(p, actor);
   if (p.state !== 'FUNDED' && p.state !== 'SETTLING') {
     throw Object.assign(new Error(`Cannot release from ${p.state}`), { statusCode: 409 });
   }
@@ -224,7 +257,7 @@ export async function releasePayment(paymentId: string, actorId: string) {
   const released = await getSettlement().release(p.escrowId ?? '0x');
   await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
   await markInvoicePaidByPayment(paymentId);
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
 // Admin resolves a FLAGGED payment. REJECT -> REJECTED; APPROVE clears the flag
@@ -244,14 +277,14 @@ export async function adminResolveFlag(paymentId: string, action: 'APPROVE' | 'R
   } else {
     await transition(paymentId, 'COMPLIANCE_CHECK', { actor: adminId, timelineKey: 'COMPLIANCE_APPROVED', extra: { reviewNote: note, resolved: true } });
   }
-  return getPayment(paymentId, adminId);
+  return getPaymentInternal(paymentId);
 }
 
 // --- Dispute transitions (called by the disputes module) ---
 // Put a completed payment on hold while a dispute is open.
 export async function holdForDispute(paymentId: string, actorId: string) {
   await transition(paymentId, 'DISPUTED', { actor: actorId, extra: { reason: 'dispute opened' } });
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
 // Resolve a dispute in the payer's favour: refund the escrow, mark REVERSED.
@@ -259,20 +292,22 @@ export async function reverseDisputed(paymentId: string, actorId: string) {
   const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const refunded = await getSettlement().refund(p.escrowId ?? '0x');
   await transition(paymentId, 'REVERSED', { actor: actorId, txHash: refunded.txHash, extra: { txHash: refunded.txHash } });
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
 // Resolve a dispute in the payee's favour: restore the completed payment.
 export async function dismissDisputed(paymentId: string, actorId: string) {
   await transition(paymentId, 'COMPLETED', { actor: actorId, extra: { disputeDismissed: true } });
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
-export async function refundPayment(paymentId: string, actorId: string) {
+export async function refundPayment(paymentId: string, actor: Actor) {
+  const actorId = actor.id;
   const p = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  assertPayer(p, actor);
   const refunded = await getSettlement().refund(p.escrowId ?? '0x');
   await transition(paymentId, 'REFUNDED', { actor: actorId, extra: { txHash: refunded.txHash } });
-  return getPayment(paymentId, actorId);
+  return getPaymentInternal(paymentId);
 }
 
 async function appendStep(paymentId: string, key: string, actor: string) {
@@ -280,7 +315,21 @@ async function appendStep(paymentId: string, key: string, actor: string) {
   await prisma.timelineStep.create({ data: { paymentId, key: step.key, label: step.label, state: step.state, actor } });
 }
 
-export async function getPayment(id: string, requesterId?: string) {
+// Public read — enforces that the caller is a party (or an admin).
+export async function getPayment(id: string, requester: Actor) {
+  const p = await prisma.payment.findUniqueOrThrow({
+    where: { id },
+    include: { timeline: { orderBy: { at: 'asc' } }, decision: true },
+  });
+  assertParty(p, requester);
+  return serialize(p);
+}
+
+// Internal read — no party check. Only for callers that have ALREADY authorized
+// the actor (the orchestrator returning the payment it just mutated, and the
+// pay-run summariser, which checks run ownership before it gets here). Never
+// expose this straight off a route.
+export async function getPaymentInternal(id: string) {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id },
     include: { timeline: { orderBy: { at: 'asc' } }, decision: true },

@@ -8,7 +8,7 @@ import type { CreatePayRunInput, PayRunStatus, Verdict } from '@gigbridge/shared
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
 import { createQuote } from '../fx/fx.service.js';
-import { createPayment, confirmPayment, getPayment } from '../payments/payment.service.js';
+import { createPayment, confirmPayment, getPaymentInternal, type Actor } from '../payments/payment.service.js';
 
 function pairOf(src: string, dst: string) {
   return `${src}${dst}`;
@@ -36,7 +36,7 @@ async function summarize(run: any) {
     rejectedCount,
     totalSrcMinor: payments.reduce((s, p) => s + p.srcAmountMinor, 0),
     createdAt: run.createdAt.toISOString(),
-    payments: await Promise.all(payments.map((p) => getPayment(p.id))),
+    payments: await Promise.all(payments.map((p) => getPaymentInternal(p.id))),
   };
 }
 
@@ -80,7 +80,7 @@ export async function confirmPayRun(runId: string, companyId: string) {
     // Confirmable when compliance approved (state COMPLIANCE_CHECK, not yet funded).
     if (verdict === 'APPROVE' && child.state === 'COMPLIANCE_CHECK') {
       const quote = await createQuote(pairOf(child.srcCurrency, child.dstCurrency), child.srcAmountMinor);
-      await confirmPayment(child.id, companyId, quote.quoteId);
+      await confirmPayment(child.id, { id: companyId, role: 'COMPANY' } satisfies Actor, quote.quoteId);
       confirmed++;
     } else {
       skipped++;
