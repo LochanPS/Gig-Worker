@@ -2,7 +2,7 @@
 // Shared by company and freelancer views. Re-fetches on the matching WS event.
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import type { Payment } from '@gigbridge/shared';
+import type { Payment, PaymentDocument } from '@gigbridge/shared';
 import { api, getToken } from '../lib/api.js';
 import { useAuth } from '../lib/auth.js';
 import { useWs } from '../lib/ws.js';
@@ -13,11 +13,17 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const [p, setP] = useState<Payment | null>(null);
+  const [docs, setDocs] = useState<PaymentDocument[]>([]);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  const load = () => api.payment(id).then(setP).catch(() => {});
+  const load = () => {
+    api.payment(id).then(setP).catch(() => {});
+    // The backend owns which documents exist and why one is not ready yet, so the
+    // controls render straight from its descriptor instead of the UI guessing.
+    api.paymentDocuments(id).then(setDocs).catch(() => setDocs([]));
+  };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
   useWs((e) => { if (e.type === 'payment.state' && e.paymentId === id) load(); });
 
@@ -56,11 +62,11 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
   if (!p) return <div className="muted">Loading…</div>;
   const isParty = user?.id === p.companyId || user?.id === p.freelancerId;
   const isCompany = user?.role === 'COMPANY';
-  const docUrl = (kind: 'receipt' | 'compliance') =>
-    `/api/v1/payments/${p.id}/${kind}.pdf`; // opened with token via fetch below
-
-  const openDoc = async (kind: 'receipt' | 'compliance') => {
-    const res = await fetch(docUrl(kind), { headers: { authorization: `Bearer ${getToken()}` } });
+  // Documents are auth'd, so fetch with the bearer token and hand the HTML to a
+  // new window rather than linking straight at the URL.
+  const openDoc = async (doc: PaymentDocument) => {
+    const base = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+    const res = await fetch(base + doc.url, { headers: { authorization: `Bearer ${getToken()}` } });
     const html = await res.text();
     const win = window.open('', '_blank');
     if (win) { win.document.write(html); win.document.close(); }
@@ -92,8 +98,18 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
           </div>
           <div className="docbtns">
-            <button className="btn ghost" onClick={() => openDoc('receipt')} disabled={p.state !== 'COMPLETED'}>Receipt</button>
-            <button className="btn ghost" onClick={() => openDoc('compliance')}>Compliance report</button>
+            {docs.map((d) => (
+              <button
+                key={d.kind}
+                className="btn ghost"
+                onClick={() => openDoc(d)}
+                disabled={!d.available}
+                title={d.available ? d.title : d.reason}
+              >
+                {d.title}
+              </button>
+            ))}
+            {docs.length === 0 && <span className="muted" style={{ fontSize: 12 }}>No documents yet.</span>}
           </div>
         </div>
       </div>
@@ -124,6 +140,19 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
               <button className="btn ghost" onClick={refundEscrow} disabled={busy}>Refund</button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* A rate lock that lapsed before funding. The backend sweeps these to
+          EXPIRED so a payment can never fund at a rate nobody agreed to. */}
+      {p.state === 'EXPIRED' && (
+        <div className="card" style={{ marginTop: 18, borderLeft: '3px solid var(--line-strong)' }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Rate lock expired</h2>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            This payment was quoted at a rate that has since lapsed, so it was never funded —
+            no money moved. Start a new payout to get a fresh quote at the current rate.
+          </p>
+          {isCompany && <Link className="btn" to="/company/pay">New payout</Link>}
         </div>
       )}
 
