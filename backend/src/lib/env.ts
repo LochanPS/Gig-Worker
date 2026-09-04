@@ -20,6 +20,14 @@ const envSchema = z.object({
   RATE_LOCK_MINUTES: z.coerce.number().default(10),
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z.string().default('development'),
+  // Recurring-payout runner. Off by default (behaviour unchanged); when true a
+  // background tick fires due schedules every SCHEDULES_TICK_SECONDS. The manual
+  // POST /schedules/run-due endpoint works regardless.
+  SCHEDULES_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  SCHEDULES_TICK_SECONDS: z.coerce.number().default(60),
 });
 
 export const env = envSchema.parse(process.env);

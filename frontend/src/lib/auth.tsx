@@ -1,12 +1,18 @@
 // Auth context: login, current user, token persistence.
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { User } from '@gigbridge/shared';
+import type { User, Role } from '@gigbridge/shared';
 import { api, setToken, getToken } from './api.js';
+
+export interface RegisterInput {
+  email: string; password: string; role: Role; country: string; name: string;
+  legalName?: string; regNumber?: string; panOrTaxId?: string;
+}
 
 interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
+  register: (input: RegisterInput) => Promise<User>;
   logout: () => void;
 }
 
@@ -28,7 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(user);
     return user;
   };
+  const register = async (input: RegisterInput) => {
+    const { token, user } = await api.register(input);
+    setToken(token);
+    setUser(user);
+    return user;
+  };
   const logout = () => { setToken(null); setUser(null); };
 
-  return <Ctx.Provider value={{ user, loading, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, loading, login, register, logout }}>{children}</Ctx.Provider>;
 }

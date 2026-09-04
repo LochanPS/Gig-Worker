@@ -47,3 +47,21 @@ export const PURPOSE_CODE_LABELS: Record<PurposeCode, string> = {
 
 export const ALERT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH'] as const;
 export type AlertSeverity = (typeof ALERT_SEVERITIES)[number];
+
+// Batch pay-run lifecycle (FR-2.5). One run fans out into N child payments; the
+// run status summarises them: DRAFT while items are being compliance-checked,
+// REVIEWED once every child has a verdict, CONFIRMED once approved children are
+// released, COMPLETED when all releasable children settled (PARTIAL if some were
+// rejected/flagged and skipped).
+export const PAYRUN_STATUSES = ['DRAFT', 'REVIEWED', 'CONFIRMED', 'COMPLETED', 'PARTIAL'] as const;
+export type PayRunStatus = (typeof PAYRUN_STATUSES)[number];
+
+// Recurring payout cadence (retainers). nextRunAt advances by the cadence each run.
+export const CADENCES = ['WEEKLY', 'BIWEEKLY', 'MONTHLY'] as const;
+export type Cadence = (typeof CADENCES)[number];
+
+export const CADENCE_DAYS: Record<Cadence, number> = {
+  WEEKLY: 7,
+  BIWEEKLY: 14,
+  MONTHLY: 30,
+};

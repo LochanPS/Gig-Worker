@@ -133,3 +133,34 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   - P1 TRACK COMPLETE: contracts + settlement + event listener, proven full-
     stack. Only deferred item is Day-3 Polygon Amoy (venue-risk; local anvil is
     the demo path). Backend typecheck clean; 34 backend + 34 forge tests green.
+
+[2026-09-04] PRODUCT BUILD-OUT: batch pay-run + recurring payouts + verification (P5)
+  SHARED CONTRACT CHANGED (logged per the coordination rule):
+  - enums.ts: added PAYRUN_STATUSES/PayRunStatus, CADENCES/Cadence, CADENCE_DAYS.
+  - schemas.ts: added payRunItemSchema, createPayRunSchema, createScheduleSchema
+    (kycSubmitSchema/kybSubmitSchema already existed, now consumed).
+  - types.ts: added PayRun, PayoutSchedule, VerificationResult entity types.
+    NO existing enum/schema/type values changed — additive only. shared rebuilt.
+  PRISMA: new models PayRun, PayoutSchedule + enums PayRunStatus, Cadence; Payment
+    gained payRunId/scheduleId (nullable FKs, SET NULL) + indexes. Migration
+    20260904120000_payrun_schedule (hand-written to match init style; prisma
+    validate + generate clean). No changes to existing columns.
+  BACKEND (all reuse the existing orchestrator — NO new settlement machinery):
+  - modules/verification: self-serve KYC (freelancer) / KYB (company) → provisions
+    a demo wallet + issues an on-chain-anchored credential via the settlement seam
+    + flips profile VERIFIED, so new signups pass EscrowVault's verified gate.
+    Routes: GET /verification/me, POST /verification/kyc, POST /verification/kyb.
+    (Closes FR-1; the real KYC vendor drops in behind submitKyc/Kyb unchanged.)
+  - modules/payrun (FR-2.5): createPayRun fans out into N child payments (one
+    compliance eval each), confirmPayRun confirms only APPROVED children. Routes:
+    POST /payruns, POST /payruns/:id/confirm, GET /payruns[/:id].
+  - modules/schedules: recurring retainers. runDueSchedules() creates + auto-
+    confirms a payment per due schedule via the orchestrator, advances nextRunAt.
+    Opt-in background tick (env SCHEDULES_ENABLED, default off) + manual POST
+    /schedules/run-due. Routes: POST /schedules, GET /schedules, pause/resume.
+  - app.ts registers the three modules; index.ts wires the optional tick.
+  FRONTEND: api.ts client methods; company pages Batch pay + Recurring; Verify
+    page (both roles); Login now has a sign-up toggle (self-serve). Nav updated.
+  VERIFIED: shared build clean; backend typecheck + 45 tests green (was 34, +11
+    schema tests); frontend typecheck + vite production build clean. Migration is
+    additive and not yet applied to any live DB (run prisma migrate deploy on P4).

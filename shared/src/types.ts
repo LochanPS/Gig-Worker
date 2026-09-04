@@ -10,6 +10,8 @@ import type {
   AlertSeverity,
   Currency,
   PurposeCode,
+  PayRunStatus,
+  Cadence,
 } from './enums.js';
 
 export interface User {
@@ -144,6 +146,49 @@ export interface Notification {
   message: string;
   read: boolean;
   createdAt: string;
+}
+
+// Batch pay-run (FR-2.5). A run owns N child payments; the summary carries the
+// aggregate the dashboard renders without loading every child.
+export interface PayRun {
+  id: string;
+  companyId: string;
+  status: PayRunStatus;
+  note: string | null;
+  itemCount: number;
+  approvedCount: number;
+  flaggedCount: number;
+  rejectedCount: number;
+  totalSrcMinor: number; // sum of child srcAmountMinor (mixed currencies noted per item)
+  createdAt: string;
+  payments?: Payment[]; // present on the detail view
+}
+
+// Recurring payout schedule (retainer). Runs create a normal payment via the
+// same orchestrator each period; nextRunAt advances by the cadence.
+export interface PayoutSchedule {
+  id: string;
+  companyId: string;
+  payeeId: string;
+  payeeName?: string;
+  srcCurrency: Currency;
+  dstCurrency: Currency;
+  srcAmountMinor: number;
+  purposeCode: PurposeCode;
+  cadence: Cadence;
+  active: boolean;
+  nextRunAt: string;
+  lastRunAt: string | null;
+  runCount: number;
+  createdAt: string;
+}
+
+// Result of submitting KYC/KYB for verification (self-serve onboarding).
+export interface VerificationResult {
+  userId: string;
+  status: KycStatus;
+  credentialHash: string | null; // keccak256 mirrored to IdentityRegistry when VERIFIED
+  walletAddress: string | null; // provisioned on verification
 }
 
 export interface AdminMetrics {

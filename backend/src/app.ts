@@ -12,6 +12,9 @@ import { registerComplianceEngine } from './modules/compliance/engine.js';
 import { complianceRoutes } from './modules/compliance/compliance.routes.js';
 import { invoiceRoutes } from './modules/invoices/invoice.routes.js';
 import { documentRoutes } from './modules/documents/document.routes.js';
+import { verificationRoutes } from './modules/verification/verification.routes.js';
+import { payRunRoutes } from './modules/payrun/payrun.routes.js';
+import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
@@ -39,6 +42,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(complianceRoutes);
       await api.register(invoiceRoutes);
       await api.register(documentRoutes);
+      await api.register(verificationRoutes);
+      await api.register(payRunRoutes);
+      await api.register(scheduleRoutes);
     },
     { prefix: '/api/v1' },
   );
