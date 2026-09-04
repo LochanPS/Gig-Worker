@@ -17,6 +17,8 @@ const I = {
   monitor: 'M3 12h4l2 5 4-12 2 7h6',
   people: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM22 19v-1a4 4 0 0 0-3-3.87M16 4.13A4 4 0 0 1 16 11.5',
   history: 'M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l4 2',
+  rules: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h4',
+  vault: 'M4 5h16v14H4zM12 12m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0M12 9V7M12 17v-2M15 12h2M7 12h2',
   id: 'M3 5h18v14H3zM7 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM4 16c.6-2 1.8-3 3-3s2.4 1 3 3M14 9h5M14 13h5',
 } as const;
 
@@ -62,6 +64,8 @@ export default function Layout({ children }: { children: ReactNode }) {
         </>}
         {user?.role === 'ADMIN' && <>
           <NavLink to="/admin" end><Icon d={I.monitor} />Monitor</NavLink>
+          <NavLink to="/admin/rules"><Icon d={I.rules} />Rules</NavLink>
+          <NavLink to="/admin/treasury"><Icon d={I.vault} />Treasury</NavLink>
           <NavLink to="/customers"><Icon d={I.people} />Customers</NavLink>
         </>}
 

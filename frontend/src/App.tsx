@@ -14,6 +14,8 @@ import PayoutAccounts from './pages/freelancer/PayoutAccounts.js';
 import Identity from './pages/freelancer/Identity.js';
 import History from './pages/freelancer/History.js';
 import AdminMonitor from './pages/admin/Monitor.js';
+import AdminRules from './pages/admin/Rules.js';
+import AdminTreasury from './pages/admin/Treasury.js';
 import PaymentDetail from './pages/PaymentDetail.js';
 import Verify from './pages/Verify.js';
 import Customers from './pages/Customers.js';
@@ -48,6 +50,9 @@ export default function App() {
         </>}
         {user.role === 'ADMIN' && <>
           <Route path="/admin" element={<AdminMonitor />} />
+          <Route path="/admin/rules" element={<AdminRules />} />
+          <Route path="/admin/treasury" element={<AdminTreasury />} />
+          <Route path="/admin/payments/:id" element={<PaymentDetail backTo="/admin" />} />
           <Route path="/customers" element={<Customers />} />
         </>}
         <Route path="*" element={<Navigate to={home} replace />} />

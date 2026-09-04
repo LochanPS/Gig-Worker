@@ -270,3 +270,43 @@ export interface FreelancerSummary {
   payoutCurrencies: Currency[];
   payable: boolean; // verified AND has at least one active payout account
 }
+
+// AI adjudication outcomes (CORRIDOR_ROADMAP item 2). The agent triages every
+// compliance FLAG so only exceptions reach a human; this is the measurement of
+// how much of the queue it actually settles.
+export type AdjudicationAction = 'AUTO_CLEAR' | 'AUTO_REJECT' | 'ESCALATE';
+
+export interface AdjudicationEntry {
+  paymentId: string;
+  action: AdjudicationAction;
+  confidence: number | null; // 0..1
+  by: string | null; // 'ai-heuristic' | the model, with the ai: prefix stripped
+  rationale: string | null;
+  at: string;
+}
+
+export interface AdjudicationSummary {
+  autoCleared: number;
+  autoRejected: number;
+  escalated: number;
+  total: number;
+  autoHandledPct: number;
+  recent: AdjudicationEntry[];
+}
+
+// Treasury (UI_SPEC 5.4): value held in escrow per corridor, and fee revenue.
+export interface CorridorHolding {
+  corridor: string;
+  srcCurrency: string;
+  count: number;
+  heldMinor: number;
+  heldMinorUsd: number;
+}
+
+export interface Treasury {
+  corridors: CorridorHolding[];
+  totalHeldMinorUsd: number;
+  feeRevenueMinorUsd: number;
+  completedCount: number;
+  inEscrowCount: number;
+}

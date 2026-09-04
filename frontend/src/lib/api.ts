@@ -4,6 +4,7 @@ import type {
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
   CustomerSummary, CreateCustomerInput, Notification, Credential, PaymentDocument,
+  AdjudicationSummary, Treasury,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -127,5 +128,7 @@ export const api = {
     req<Payment>(`/admin/queue/${id}/resolve`, { method: 'POST', body: JSON.stringify({ action, note }) }),
   alerts: () => req<Alert[]>('/admin/alerts'),
   metrics: () => req<AdminMetrics>('/admin/metrics'),
+  adjudications: () => req<AdjudicationSummary>('/admin/adjudications'),
+  treasury: () => req<Treasury>('/admin/treasury'),
   rules: () => req<Array<{ id: string; jurisdiction: string; severity: string; legalRef: string }>>('/admin/rules'),
 };
