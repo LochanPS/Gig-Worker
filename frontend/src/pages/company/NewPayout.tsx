@@ -80,7 +80,12 @@ export default function NewPayout() {
 
   const loadPayees = (select?: string) =>
     api.freelancers()
-      .then((list) => { setPayees(list); setPayeeId((cur) => select ?? cur ?? ''); })
+      .then((list) => {
+        setPayees(list);
+        // Preselect someone who can actually be paid, so the step opens ready to
+        // continue rather than with a dead button and no hint why.
+        setPayeeId((cur) => select ?? (cur || list.find((p) => p.payable)?.id || list[0]?.id || ''));
+      })
       .catch((e) => setErr((e as Error).message));
 
   useEffect(() => { loadPayees(); }, []);
