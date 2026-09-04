@@ -230,3 +230,13 @@ export interface AdminMetrics {
   avgSettlementSeconds: number;
   flaggedPct: number;
 }
+
+// Downloadable documents for a payment. The backend owns the availability rules
+// so the UI can render its document controls straight from the descriptor.
+export interface PaymentDocument {
+  kind: 'receipt' | 'compliance' | 'firc';
+  title: string;
+  url: string; // ready-to-fetch API path, e.g. /api/v1/payments/<id>/firc.pdf
+  available: boolean;
+  reason?: string; // why it is not yet available (for a disabled control's tooltip)
+}
