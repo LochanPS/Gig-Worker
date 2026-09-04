@@ -1,19 +1,15 @@
 // The payout wizard (UI_SPEC §3.2) — the demo centerpiece. Live quote, compliance
 // verdict + agent reasoning, then confirm -> settle, all against the real backend.
-import { useState } from 'react';
-import type { FxQuote, Payment } from '@gigbridge/shared';
+import { useEffect, useState } from 'react';
+import type { FreelancerSummary, FxQuote, Payment } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
 
-// Seeded demo freelancers (BUILD_CONTRACTS §7).
-const PAYEES = [
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Priya Sharma (IN, verified)' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'Alex Carter (US, verified)' },
-  { id: '66666666-6666-6666-6666-666666666666', name: 'SanctionedCo (watchlist — will reject)' },
-];
-
 export default function NewPayout() {
-  const [payeeId, setPayeeId] = useState(PAYEES[0].id);
+  // The real roster (GET /directory/freelancers). This used to be three
+  // hardcoded seed UUIDs, so anyone who actually signed up could never be paid.
+  const [payees, setPayees] = useState<FreelancerSummary[]>([]);
+  const [payeeId, setPayeeId] = useState('');
   const [amount, setAmount] = useState('500');
   const [quote, setQuote] = useState<FxQuote | null>(null);
   const [result, setResult] = useState<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } } | null>(null);
@@ -21,6 +17,16 @@ export default function NewPayout() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    api.freelancers()
+      .then((list) => {
+        setPayees(list);
+        setPayeeId((cur) => cur || list[0]?.id || '');
+      })
+      .catch((e) => setErr((e as Error).message));
+  }, []);
+
+  const payee = payees.find((p) => p.id === payeeId);
   const amountMinor = Math.round(parseFloat(amount || '0') * 100);
 
   const getQuote = async () => {
@@ -56,8 +62,20 @@ export default function NewPayout() {
           <div style={{ flex: 2, minWidth: 220 }}>
             <label>Payee</label>
             <select value={payeeId} onChange={(e) => setPayeeId(e.target.value)}>
-              {PAYEES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {payees.length === 0 && <option value="">No freelancers yet</option>}
+              {payees.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.country}, {p.kycStatus.toLowerCase()})
+                </option>
+              ))}
             </select>
+            {payee && !payee.payable && (
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                {payee.kycStatus !== 'VERIFIED'
+                  ? 'Not verified yet — this payment will be refused.'
+                  : 'No payout account on file — this payout will fail until they add one.'}
+              </div>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 120 }}>
             <label>Amount (EUR)</label>
@@ -78,7 +96,7 @@ export default function NewPayout() {
         )}
       </div>
 
-      <button className="btn" onClick={runCompliance} disabled={busy}>{busy ? 'Running…' : 'Run compliance & create'}</button>
+      <button className="btn" onClick={runCompliance} disabled={busy || !payeeId}>{busy ? 'Running…' : 'Run compliance & create'}</button>
       {err && <div className="err">{err}</div>}
 
       {result && (

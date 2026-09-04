@@ -240,3 +240,17 @@ export interface PaymentDocument {
   available: boolean;
   reason?: string; // why it is not yet available (for a disabled control's tooltip)
 }
+
+// A payable freelancer, as the company's roster and the payout wizard's payee
+// picker see them (FR-6.1). payoutCurrencies lists the currencies they have an
+// active payout account in — a payment to a currency not in this list will land
+// in PAYOUT_FAILED, so the UI can warn before the company confirms.
+export interface FreelancerSummary {
+  id: string;
+  name: string;
+  country: string;
+  kycStatus: KycStatus;
+  walletAddress: string | null;
+  payoutCurrencies: Currency[];
+  payable: boolean; // verified AND has at least one active payout account
+}

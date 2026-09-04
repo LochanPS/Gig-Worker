@@ -2,7 +2,7 @@
 import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
-  PayoutAccount, Dispute, AddPayoutAccountInput,
+  PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -48,6 +48,9 @@ export const api = {
     req<VerificationResult>('/verification/kyc', { method: 'POST', body: JSON.stringify(body) }),
   submitKyb: (body: { legalName: string; regNumber: string; country: string }) =>
     req<VerificationResult>('/verification/kyb', { method: 'POST', body: JSON.stringify(body) }),
+
+  // freelancer roster (FR-6.1) — the payout wizard's payee list
+  freelancers: () => req<FreelancerSummary[]>('/directory/freelancers'),
 
   // batch pay-run (FR-2.5)
   payRuns: () => req<PayRun[]>('/payruns'),
