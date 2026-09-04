@@ -1,6 +1,6 @@
 ================================================================================
 CONTRACTS & SETTLEMENT — INTEGRATION GUIDE
-Owner: P1 (track/chain). Consumers: P2 backend orchestrator.
+Owner: P1 (track/chain). Consumers: P2 backend orchestrator, P3 frontend (§11).
 Purpose: the exact seam where the on-chain layer plugs into the backend, so P1
 can build contracts independently and swap the real settlement in with zero
 orchestrator changes. Read alongside docs/TRD.txt §3 and docs/BUILD_CONTRACTS.txt §6.
@@ -249,4 +249,62 @@ REMAINING (P1, deferred): Day-3 Polygon Amoy public deploy + explorer links.
 Deliberately deferred — external RPC + a funded key is a venue risk, and local
 anvil is the live-demo path. The core P1 track (contracts + settlement + event
 listener) is COMPLETE and proven full-stack.
+
+--------------------------------------------------------------------------------
+11. FRONTEND — HOW THE UI SURFACES THE SETTLEMENT & CONTRACT LAYER (P3)
+--------------------------------------------------------------------------------
+The frontend never talks to the chain or imports ABIs. It reads the settlement
+and contract facts off the shared @gigbridge/shared rows the backend persists
+(Payment, ComplianceDecision, Credential) and the WS events. Everything below is
+at the data-contract level, so it holds no matter which settlement impl
+(simulated or real) is active — when P1's real hashes replace the simulated
+ones (backend doc §9), the UI shows real on-chain references with zero change.
+
+Fields the UI reads and where they surface:
+- Payment.state + Payment.timeline[] -> the payment timeline. The seven steps
+  (created, compliance approved, rate locked, escrow funded, settling, released,
+  payee credited) map to the RATE_LOCKED->FUNDED->SETTLING->COMPLETED machine in
+  §1. Each reached step shows its `at` and `actor`; unreached steps are dashed.
+- Payment.txHashFund / Payment.txHashRelease -> the FUNDED and RELEASED steps
+  render a truncated, copyable tx link (0x1a2b...9f) to the block explorer.
+- Payment.escrowId -> shown on the payment summary / receipt as the on-chain id.
+- Payment.srcAmountMinor / dstAmountMinor / feeAmountMinor -> all amounts are
+  integer MINOR units end to end; the UI divides by 100 in exactly one place
+  (money formatter). The 6-decimal MockUSDC scaling in §5 is entirely
+  backend/chain side and never reaches the UI.
+- ComplianceDecision.ruleResults[] / agentExplanation -> the compliance step
+  expands to every rule (id, jurisdiction, pass/fail, legalRef, message) and the
+  agent's reasoning. ComplianceDecision.anchorTxHash -> the on-chain audit anchor
+  link (AuditAnchor.anchor, §2).
+- Credential.did / hash / issuedAt / expiresAt / revoked / anchorTxHash -> the
+  identity card. `hash` is the IdentityRegistry credential hash (§2); the card
+  shows the anchor tx and a reuse count. No PII is ever displayed beyond name,
+  matching the "hashes only on-chain" rule.
+- FxQuote -> the quote card and rate-lock countdown; the locked rate id rides on
+  Payment.fxRateId.
+
+Realtime seam (PRD FR-5.3 live tx feed): the UI holds ONE socket and consumes
+all four WS events from docs/BUILD_CONTRACTS.txt §5 — payment.state (advances the
+timeline live across the Company/Freelancer/Admin windows), alert.new (admin
+anomaly feed), notification.new (bell + toast), metrics.tick (admin KPIs). The
+on-chain event listener P1 wired (§10 EVENT LISTENER) is the source of truth the
+backend should broadcast as payment.state on each PaymentFunded/Released so the
+three windows ripple within ~1s of the real tx mining.
+  WS PATH: the mock serves /ws at the root; the real backend serves it inside
+  the prefix at /api/v1/ws. The client keeps this in one constant (lib/ws.ts
+  WS_PATH) to flip in a single place.
+
+Documents: the receipt and compliance report the UI offers as downloads carry
+the same on-chain references the backend documents (§9) — escrowId, txHashFund,
+txHashRelease, and the compliance anchorTxHash — so they become real explorer
+references automatically once real settlement populates the rows.
+
+Explorer links: the tx-link component takes an explorer base URL. Point it at the
+local anvil/analysis endpoint for the live-anvil demo (§10) and at the Polygon
+Amoy explorer if/when the Day-3 public deploy lands.
+
+What the frontend needs from the settlement layer (nothing new): only that the
+backend keeps populating the existing Payment/ComplianceDecision/Credential
+fields and broadcasts payment.state on real fund/release. No UI change is
+required to go from simulated to real settlement.
 ================================================================================
