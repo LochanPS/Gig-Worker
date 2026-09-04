@@ -11,6 +11,7 @@ import { paymentRoutes } from './modules/payments/payment.routes.js';
 import { registerComplianceEngine } from './modules/compliance/engine.js';
 import { complianceRoutes } from './modules/compliance/compliance.routes.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
+import { notificationRoutes } from './modules/notifications/notification.routes.js';
 import { invoiceRoutes } from './modules/invoices/invoice.routes.js';
 import { documentRoutes } from './modules/documents/document.routes.js';
 import { credentialRoutes } from './modules/credentials/credential.routes.js';
@@ -45,6 +46,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(paymentRoutes);
       await api.register(complianceRoutes);
       await api.register(adminRoutes);
+      await api.register(notificationRoutes);
       await api.register(invoiceRoutes);
       await api.register(documentRoutes);
       await api.register(credentialRoutes);

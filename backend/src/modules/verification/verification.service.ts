@@ -11,9 +11,9 @@
 import { randomBytes } from 'node:crypto';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
-import { emitToUser } from '../../lib/ws.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
+import { notify } from '../notifications/notification.service.js';
 import { isSanctioned } from '../compliance/rules/sanctions.js';
 import type { VerificationResult } from '@gigbridge/shared';
 
@@ -63,13 +63,6 @@ async function provision(userId: string, name: string): Promise<{ hash: string; 
   return { hash, walletAddress };
 }
 
-async function notify(userId: string, kind: string, message: string) {
-  const n = await prisma.notification.create({ data: { userId, kind, message } });
-  emitToUser(userId, {
-    type: 'notification.new',
-    notification: { id: n.id, userId, kind, message, read: false, createdAt: n.createdAt.toISOString() },
-  });
-}
 
 export async function submitKyc(
   freelancerId: string,
