@@ -1,103 +1,140 @@
-// Mock API server (BUILD_CONTRACTS §4) — lets P3/frontend build before the real
-// backend exists. In-memory, no DB, no chain. Not for production.
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import websocket from '@fastify/websocket';
-import { randomUUID } from 'node:crypto';
-import type { Payment, WsEvent } from '@gigbridge/shared';
-import { users, payments, makeQuote, alerts, decisions, metrics } from './fixtures.js';
+// Trivial mock API server (BUILD_CONTRACTS §4). Serves every REST path with
+// seed-shaped fake data and NO database, so the frontend (P3) can build against
+// the frozen contract before the real backend lands. Run: `pnpm dev:mock`.
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { randomUUID } from "node:crypto";
+import type {
+  PaymentDTO,
+  FxQuoteDTO,
+  AdminMetricsDTO,
+  Corridor,
+} from "@gigbridge/shared";
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
-await app.register(websocket);
 
-const P = '/api/v1';
-const token = (id: string) => `mock-jwt.${id}`;
-const userList = Object.values(users);
-const byToken = (t?: string) => userList.find((u) => token(u.id) === (t ?? '').replace('Bearer ', ''));
-const strip = (u: (typeof userList)[number]) => { const { password, ...rest } = u; return rest; };
+const now = () => new Date().toISOString();
+const users = {
+  novatek: { id: "11111111-1111-4111-8111-111111111111", name: "Novatek GmbH", role: "COMPANY" },
+  priya: { id: "22222222-2222-4222-8222-222222222222", name: "Priya Sharma", role: "FREELANCER" },
+  admin: { id: "33333333-3333-4333-8333-333333333333", name: "Platform Admin", role: "ADMIN" },
+};
 
-// --- auth ---
-app.post(`${P}/auth/register`, async (req, reply) => {
-  const b = req.body as any;
-  const u = { ...userList[0], id: randomUUID(), email: b.email, role: b.role, country: b.country, name: b.name, password: b.password };
-  return reply.send({ token: token(u.id), user: strip(u) });
-});
-app.post(`${P}/auth/login`, async (req, reply) => {
-  const b = req.body as any;
-  const u = userList.find((x) => x.email === b.email);
-  if (!u) return reply.code(401).send({ error: { code: 'AUTH', message: 'invalid credentials' } });
-  return reply.send({ token: token(u.id), user: strip(u) });
-});
-app.get(`${P}/auth/me`, async (req, reply) => {
-  const u = byToken(req.headers.authorization);
-  if (!u) return reply.code(401).send({ error: { code: 'AUTH', message: 'unauthorized' } });
-  return reply.send(strip(u));
-});
-
-// --- fx ---
-app.get(`${P}/fx/quote`, async (req) => {
-  const q = req.query as any;
-  return makeQuote(q.pair, Number(q.amount));
-});
-app.get(`${P}/fx/history`, async (req) => {
-  const q = req.query as any;
-  const days = Number(q.days ?? 30);
-  const base = q.pair === 'USDINR' ? 83 : 90;
-  return Array.from({ length: days }, (_, i) => ({
-    date: new Date(Date.now() - (days - i) * 86_400_000).toISOString().slice(0, 10),
-    rate: +(base + Math.sin(i / 3) * 0.8).toFixed(3),
-  }));
-});
-
-// --- payments ---
-app.get(`${P}/payments`, async () => payments);
-app.get(`${P}/payments/:id`, async (req, reply) => {
-  const p = payments.find((x) => x.id === (req.params as any).id);
-  return p ? p : reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'no payment' } });
-});
-app.post(`${P}/payments`, async (req, reply) => {
-  const b = req.body as any;
-  const p: Payment = {
-    id: randomUUID(), companyId: byToken(req.headers.authorization)?.id ?? users.novatek.id,
-    freelancerId: b.payeeId, srcCurrency: b.srcCurrency, dstCurrency: b.dstCurrency,
-    srcAmountMinor: b.srcAmountMinor, dstAmountMinor: null, feeAmountMinor: null, fxRateId: null,
-    purposeCode: b.purposeCode, invoiceRef: b.invoiceRef ?? null, state: 'COMPLIANCE_CHECK',
-    escrowId: null, complianceDecisionId: 'cd-1', txHashFund: null, txHashRelease: null,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    timeline: payments[0].timeline.slice(0, 2),
+function fakePayment(state: PaymentDTO["state"]): PaymentDTO {
+  const id = randomUUID();
+  return {
+    id,
+    companyId: users.novatek.id,
+    freelancerId: users.priya.id,
+    payerName: users.novatek.name,
+    payeeName: users.priya.name,
+    srcCurrency: "EUR",
+    dstCurrency: "INR",
+    srcAmountMinor: 50000,
+    dstAmountMinor: 4500000,
+    feeAmountMinor: 375,
+    purposeCode: "P0802",
+    invoiceRef: null,
+    state,
+    escrowId: "0x" + "ab".repeat(32),
+    txHashFund: state === "FUNDED" || state === "COMPLETED" ? "0x" + "cd".repeat(32) : null,
+    txHashRelease: state === "COMPLETED" ? "0x" + "ef".repeat(32) : null,
+    timeline: [
+      { state: "DRAFT", at: now() },
+      { state: "COMPLIANCE_CHECK", at: now() },
+    ],
+    compliance: {
+      id: randomUUID(),
+      verdict: "APPROVE",
+      ruleResults: [],
+      agentExplanation:
+        "This EUR 500 payment from a German company to a verified Indian freelancer for software services falls under FEMA purpose code P0802 and clears all checks.",
+      anchorTxHash: "0x" + "12".repeat(32),
+      reviewedBy: null,
+      reviewNote: null,
+      createdAt: now(),
+    },
+    createdAt: now(),
+    updatedAt: now(),
   };
-  payments.push(p);
-  return reply.send(p);
+}
+
+app.get("/health", async () => ({ ok: true, mock: true }));
+
+app.post("/api/v1/auth/register", async () => ({ token: "mock.jwt.token", user: users.novatek }));
+app.post("/api/v1/auth/login", async () => ({ token: "mock.jwt.token", user: users.novatek }));
+app.get("/api/v1/auth/me", async () => users.novatek);
+app.get("/api/v1/credentials/me", async () => ({
+  id: randomUUID(),
+  did: "did:gigbridge:mock",
+  hash: "0x" + "aa".repeat(32),
+  issuedAt: now(),
+  expiresAt: now(),
+  revoked: false,
+}));
+
+app.get("/api/v1/fx/quote", async (req): Promise<FxQuoteDTO> => {
+  const q = req.query as { pair?: Corridor; amount?: string };
+  const amount = Number(q.amount ?? 50000);
+  return {
+    quoteId: randomUUID(),
+    pair: (q.pair ?? "EURINR") as Corridor,
+    midRate: 90.25,
+    srcAmountMinor: amount,
+    fee: Math.max(Math.round(amount * 0.0075), 100),
+    gasEstimate: 5,
+    payeeReceives: Math.round(amount * 90.25),
+    expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+  };
 });
-app.post(`${P}/payments/:id/confirm`, async (req) => {
-  const p = payments.find((x) => x.id === (req.params as any).id)!;
-  p.state = 'COMPLETED'; p.timeline = payments[0].timeline;
-  return p;
-});
-app.post(`${P}/payments/:id/release`, async (req) => payments.find((x) => x.id === (req.params as any).id));
-app.post(`${P}/payments/:id/refund`, async (req) => payments.find((x) => x.id === (req.params as any).id));
-app.get(`${P}/payments/:id/timeline`, async (req) => (payments.find((x) => x.id === (req.params as any).id)?.timeline ?? []));
-
-// --- compliance / admin ---
-app.get(`${P}/admin/queue`, async () => payments.filter((p) => p.state === 'FLAGGED'));
-app.post(`${P}/admin/queue/:id/resolve`, async () => ({ ok: true }));
-app.get(`${P}/admin/alerts`, async () => alerts);
-app.get(`${P}/admin/metrics`, async () => metrics);
-app.get(`${P}/admin/rules`, async () => decisions[0].ruleResults);
-app.get(`${P}/credentials/me`, async () => ({ did: 'did:gigbridge:priya', hash: '0xhash', issuedAt: '2026-08-01T00:00:00Z', expiresAt: '2027-08-01T00:00:00Z', revoked: false }));
-
-// --- invoices ---
-app.post(`${P}/invoices`, async (req, reply) => reply.send({ id: randomUUID(), status: 'SENT', ...(req.body as any) }));
-app.post(`${P}/invoices/:id/approve`, async () => ({ ok: true }));
-
-// --- websocket: emit a demo payment.state tick every 4s ---
-app.get('/ws', { websocket: true }, (conn) => {
-  const iv = setInterval(() => {
-    const ev: WsEvent = { type: 'metrics.tick', metrics };
-    conn.socket.send(JSON.stringify(ev));
-  }, 4000);
-  conn.socket.on('close', () => clearInterval(iv));
+app.get("/api/v1/fx/history", async (req) => {
+  const q = req.query as { pair?: Corridor };
+  const points = Array.from({ length: 30 }, (_, i) => ({
+    date: new Date(Date.now() - (29 - i) * 86_400_000).toISOString().slice(0, 10),
+    rate: +(90 + Math.sin(i / 4)).toFixed(4),
+  }));
+  return { pair: q.pair ?? "EURINR", points };
 });
 
-app.listen({ port: 4000, host: '0.0.0.0' }).then(() => app.log.info('mock API on :4000'));
+app.post("/api/v1/payments", async () => ({ payment: fakePayment("COMPLIANCE_CHECK"), quote: null }));
+app.post("/api/v1/payments/:id/confirm", async () => fakePayment("COMPLETED"));
+app.post("/api/v1/payments/:id/release", async () => fakePayment("COMPLETED"));
+app.post("/api/v1/payments/:id/refund", async () => fakePayment("REFUNDED"));
+app.get("/api/v1/payments", async () => [fakePayment("COMPLETED"), fakePayment("FLAGGED")]);
+app.get("/api/v1/payments/:id", async () => fakePayment("COMPLETED"));
+app.get("/api/v1/payments/:id/timeline", async () => fakePayment("COMPLETED").timeline);
+
+app.post("/api/v1/invoices", async () => ({ id: randomUUID(), status: "OPEN" }));
+app.post("/api/v1/invoices/:id/approve", async () => ({ invoiceId: randomUUID(), draft: {} }));
+app.get("/api/v1/invoices", async () => []);
+
+app.get("/api/v1/admin/queue", async () => [fakePayment("FLAGGED")]);
+app.post("/api/v1/admin/queue/:id/resolve", async () => fakePayment("RATE_LOCKED"));
+app.get("/api/v1/admin/alerts", async () => [
+  {
+    id: randomUUID(),
+    type: "STRUCTURING",
+    paymentId: randomUUID(),
+    severity: "FLAG",
+    details: { message: "3 payments of EUR 9,400 within 72h" },
+    resolved: false,
+    createdAt: now(),
+  },
+]);
+app.get("/api/v1/admin/metrics", async (): Promise<AdminMetricsDTO> => ({
+  totalVolumeUsdMinor: 4_820_000,
+  feeRevenueUsdMinor: 36_150,
+  paymentsCompleted: 40,
+  paymentsFlagged: 1,
+  avgSettlementSeconds: 12,
+  byCorridor: [
+    { pair: "EURINR", count: 22, volumeUsdMinor: 2_600_000 },
+    { pair: "USDINR", count: 18, volumeUsdMinor: 2_220_000 },
+  ],
+}));
+app.get("/api/v1/admin/rules", async () => ({ rules: [], grouped: {} }));
+
+const port = Number(process.env.PORT ?? 4000);
+await app.listen({ port, host: "0.0.0.0" });
+app.log.info(`GigBridge MOCK API on http://localhost:${port} (no DB)`);

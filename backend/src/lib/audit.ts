@@ -1,20 +1,22 @@
-// Append-only audit trail (NFR-5). Every admin action and state transition logs here.
-import { prisma } from './db.js';
+import { prisma } from "./db.js";
 
-export async function audit(
-  actor: string,
-  action: string,
-  entity: string,
-  before?: unknown,
-  after?: unknown,
-): Promise<void> {
+// Full AuditLog on every admin action and state transition (TRD 6).
+export async function audit(params: {
+  actorId?: string | null;
+  action: string;
+  entity: string;
+  entityId: string;
+  before?: unknown;
+  after?: unknown;
+}): Promise<void> {
   await prisma.auditLog.create({
     data: {
-      actor,
-      action,
-      entity,
-      before: (before ?? null) as never,
-      after: (after ?? null) as never,
+      actorId: params.actorId ?? null,
+      action: params.action,
+      entity: params.entity,
+      entityId: params.entityId,
+      beforeJson: (params.before ?? undefined) as object | undefined,
+      afterJson: (params.after ?? undefined) as object | undefined,
     },
   });
 }

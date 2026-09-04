@@ -1,101 +1,101 @@
-// Entity shapes shared across backend and frontend.
-// Amounts are ALWAYS integers in minor units (cents/paise). See BUILD_CONTRACTS §3.
+// Canonical enums and entity types — source of truth for FE + BE.
+// Mirrors BUILD_CONTRACTS.txt section 3. Any change here requires a note in
+// docs/INTEGRATION_LOG.txt in the same commit.
 
-import type {
-  PaymentState,
-  Verdict,
-  Role,
-  KycStatus,
-  AlertType,
-  AlertSeverity,
-  Currency,
-  PurposeCode,
-  PayRunStatus,
-  Cadence,
-} from './enums.js';
+export const PAYMENT_STATES = [
+  "DRAFT",
+  "COMPLIANCE_CHECK",
+  "FLAGGED",
+  "REJECTED",
+  "RATE_LOCKED",
+  "FUNDED",
+  "SETTLING",
+  "COMPLETED",
+  "REFUNDED",
+  "EXPIRED",
+] as const;
+export type PaymentState = (typeof PAYMENT_STATES)[number];
 
-export interface User {
+export const VERDICTS = ["APPROVE", "FLAG", "REJECT"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
+export const ROLES = ["COMPANY", "FREELANCER", "ADMIN"] as const;
+export type Role = (typeof ROLES)[number];
+
+export const KYC_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
+export type KycStatus = (typeof KYC_STATUSES)[number];
+
+export const ALERT_TYPES = ["VELOCITY", "STRUCTURING", "OUTLIER", "SANCTIONS"] as const;
+export type AlertType = (typeof ALERT_TYPES)[number];
+
+export const CURRENCIES = ["EUR", "USD", "INR"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+
+// Corridor pairs used in the demo.
+export const CORRIDORS = ["EURINR", "USDINR", "INRUSD"] as const;
+export type Corridor = (typeof CORRIDORS)[number];
+
+export const PURPOSE_CODES = ["P0802", "P0801", "P1006", "P0805"] as const;
+export type PurposeCode = (typeof PURPOSE_CODES)[number];
+
+export const PURPOSE_CODE_LABELS: Record<PurposeCode, string> = {
+  P0802: "Software services",
+  P0801: "IT / consultancy services",
+  P1006: "Design services",
+  P0805: "Data processing services",
+};
+
+export const PAYOUT_PREFERENCES = ["AUTO_CONVERT", "HOLD"] as const;
+export type PayoutPreference = (typeof PAYOUT_PREFERENCES)[number];
+
+export const KYB_STATUSES = ["PENDING", "VERIFIED", "REJECTED"] as const;
+export type KybStatus = (typeof KYB_STATUSES)[number];
+
+// Compliance rule severities (TRD 4.5).
+export const RULE_SEVERITIES = ["BLOCK", "FLAG", "INFO"] as const;
+export type RuleSeverity = (typeof RULE_SEVERITIES)[number];
+
+export type Jurisdiction = "IN" | "EU" | "US" | "GB";
+export type RuleDirection = "IN" | "OUT" | "ANY";
+
+// ---- Money ----
+// Amounts are integers in MINOR units (cents / paise) everywhere in API + DB.
+export type MinorUnits = number;
+
+// ---- DTOs returned by the API ----
+
+export interface UserDTO {
   id: string;
   role: Role;
   email: string;
-  country: string; // ISO-3166 alpha-2, e.g. 'DE', 'IN', 'US'
+  country: string;
   name: string;
   walletAddress: string | null;
-  createdAt: string; // ISO timestamp
+  createdAt: string;
 }
 
-export interface CompanyProfile {
-  userId: string;
-  legalName: string;
-  regNumber: string;
-  country: string;
-  kybStatus: KycStatus;
-}
-
-export interface FreelancerProfile {
-  userId: string;
-  fullName: string;
-  country: string;
-  panOrTaxId: string | null;
-  kycStatus: KycStatus;
-  payoutPreference: 'AUTO_CONVERT' | 'HOLD';
-}
-
-export interface Credential {
+export interface CredentialDTO {
   id: string;
-  userId: string;
   did: string;
-  hash: string; // keccak256 of the off-chain credential JSON; mirrored on-chain
+  hash: string;
   issuedAt: string;
   expiresAt: string;
   revoked: boolean;
-  anchorTxHash: string | null;
-}
-
-export interface TimelineStep {
-  key: string; // e.g. 'CREATED', 'COMPLIANCE_APPROVED', 'RATE_LOCKED', ...
-  label: string;
-  state: PaymentState | null;
-  at: string | null; // null = not reached yet
-  actor: string | null;
-  detail?: Record<string, unknown>;
-  txHash?: string | null;
-}
-
-export interface Payment {
-  id: string;
-  companyId: string;
-  freelancerId: string;
-  srcCurrency: Currency;
-  dstCurrency: Currency;
-  srcAmountMinor: number;
-  dstAmountMinor: number | null;
-  feeAmountMinor: number | null;
-  fxRateId: string | null;
-  purposeCode: PurposeCode | null;
-  invoiceRef: string | null;
-  state: PaymentState;
-  escrowId: string | null; // keccak256(uuid), the on-chain id
-  complianceDecisionId: string | null;
-  txHashFund: string | null;
-  txHashRelease: string | null;
-  createdAt: string;
-  updatedAt: string;
-  timeline: TimelineStep[];
 }
 
 export interface RuleResult {
-  ruleId: string; // e.g. 'IN-RBI-001'
-  jurisdiction: 'INDIA' | 'EU' | 'US' | 'PLATFORM';
+  id: string;
+  jurisdiction: Jurisdiction;
+  direction: RuleDirection;
+  severity: RuleSeverity;
   passed: boolean;
-  severity: 'BLOCK' | 'FLAG' | 'INFO';
+  triggered: boolean;
   legalRef: string;
   message: string;
 }
 
-export interface ComplianceDecision {
+export interface ComplianceDecisionDTO {
   id: string;
-  paymentId: string;
   verdict: Verdict;
   ruleResults: RuleResult[];
   agentExplanation: string;
@@ -105,96 +105,76 @@ export interface ComplianceDecision {
   createdAt: string;
 }
 
-export interface Alert {
+export interface TimelineEntry {
+  state: PaymentState;
+  at: string;
+  note?: string;
+  txHash?: string;
+}
+
+export interface FxQuoteDTO {
+  quoteId: string;
+  pair: Corridor;
+  midRate: number;
+  srcAmountMinor: MinorUnits;
+  fee: MinorUnits; // in source currency minor units
+  gasEstimate: MinorUnits;
+  payeeReceives: MinorUnits; // in destination currency minor units
+  expiresAt: string;
+}
+
+export interface PaymentDTO {
+  id: string;
+  companyId: string;
+  freelancerId: string;
+  payerName: string;
+  payeeName: string;
+  srcCurrency: Currency;
+  dstCurrency: Currency;
+  srcAmountMinor: MinorUnits;
+  dstAmountMinor: MinorUnits | null;
+  feeAmountMinor: MinorUnits | null;
+  purposeCode: PurposeCode;
+  invoiceRef: string | null;
+  state: PaymentState;
+  escrowId: string | null;
+  txHashFund: string | null;
+  txHashRelease: string | null;
+  timeline: TimelineEntry[];
+  compliance: ComplianceDecisionDTO | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertDTO {
   id: string;
   type: AlertType;
-  severity: AlertSeverity;
   paymentId: string | null;
+  severity: RuleSeverity;
   details: Record<string, unknown>;
   resolved: boolean;
   createdAt: string;
 }
 
-export interface FxQuote {
-  quoteId: string;
-  pair: string;
-  midRate: number; // units of dst per 1 unit of src
-  srcAmountMinor: number;
-  feeMinor: number; // in src currency minor units
-  gasEstimateMinor: number; // in src currency minor units
-  payeeReceivesMinor: number; // in dst currency minor units
-  incumbentFeeMinor: number; // "vs PayPal" comparison, src minor units
-  expiresAt: string;
-}
-
-export interface Invoice {
-  id: string;
-  freelancerId: string;
-  companyId: string;
-  amountMinor: number;
-  currency: Currency;
-  memo: string;
-  status: 'SENT' | 'APPROVED' | 'PAID';
-  paymentId: string | null;
-  createdAt: string;
-}
-
-export interface Notification {
+export interface NotificationDTO {
   id: string;
   userId: string;
   kind: string;
-  message: string;
+  title: string;
+  body: string;
   read: boolean;
   createdAt: string;
 }
 
-// Batch pay-run (FR-2.5). A run owns N child payments; the summary carries the
-// aggregate the dashboard renders without loading every child.
-export interface PayRun {
-  id: string;
-  companyId: string;
-  status: PayRunStatus;
-  note: string | null;
-  itemCount: number;
-  approvedCount: number;
-  flaggedCount: number;
-  rejectedCount: number;
-  totalSrcMinor: number; // sum of child srcAmountMinor (mixed currencies noted per item)
-  createdAt: string;
-  payments?: Payment[]; // present on the detail view
-}
-
-// Recurring payout schedule (retainer). Runs create a normal payment via the
-// same orchestrator each period; nextRunAt advances by the cadence.
-export interface PayoutSchedule {
-  id: string;
-  companyId: string;
-  payeeId: string;
-  payeeName?: string;
-  srcCurrency: Currency;
-  dstCurrency: Currency;
-  srcAmountMinor: number;
-  purposeCode: PurposeCode;
-  cadence: Cadence;
-  active: boolean;
-  nextRunAt: string;
-  lastRunAt: string | null;
-  runCount: number;
-  createdAt: string;
-}
-
-// Result of submitting KYC/KYB for verification (self-serve onboarding).
-export interface VerificationResult {
-  userId: string;
-  status: KycStatus;
-  credentialHash: string | null; // keccak256 mirrored to IdentityRegistry when VERIFIED
-  walletAddress: string | null; // provisioned on verification
-}
-
-export interface AdminMetrics {
-  volume24hMinorUsd: number;
-  revenueMinorUsd: number;
-  activeCorridors: number;
+export interface AdminMetricsDTO {
+  totalVolumeUsdMinor: MinorUnits;
+  feeRevenueUsdMinor: MinorUnits;
+  paymentsCompleted: number;
+  paymentsFlagged: number;
   avgSettlementSeconds: number;
-  flaggedPct: number;
+  byCorridor: Array<{ pair: Corridor; count: number; volumeUsdMinor: MinorUnits }>;
+}
+
+export interface ApiError {
+  error: { code: string; message: string };
 }
