@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Alert } from '@gigbridge/shared';
+import type { Alert, Dispute } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { useWs } from '../../lib/ws.js';
 import { Chip, Stat } from '../../components/bits.js';
@@ -9,17 +9,26 @@ interface QueueItem { paymentId: string; company: string; freelancer: string; ve
 export default function Monitor() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
   const load = () => {
     api.queue().then((q) => setQueue(q as unknown as QueueItem[])).catch(() => {});
     api.alerts().then(setAlerts).catch(() => {});
+    api.disputes().then(setDisputes).catch(() => {});
   };
   useEffect(() => { load(); }, []);
-  useWs((e) => { if (e.type === 'alert.new' || e.type === 'payment.state') load(); });
+  useWs((e) => { if (e.type === 'alert.new' || e.type === 'payment.state' || e.type === 'notification.new') load(); });
 
   const resolve = async (id: string, action: 'APPROVE' | 'REJECT') => {
     await api.resolveFlag(id, action, `${action} by operator`).catch(() => {});
     load();
   };
+
+  const resolveDispute = async (id: string, action: 'REFUND' | 'DISMISS') => {
+    await api.resolveDispute(id, action, `${action} by operator`).catch(() => {});
+    load();
+  };
+
+  const openDisputes = disputes.filter((d) => d.status === 'OPEN');
 
   return (
     <>
@@ -29,7 +38,26 @@ export default function Monitor() {
       <div className="grid stats" style={{ marginBottom: 22 }}>
         <Stat label="In review" value={String(queue.length)} />
         <Stat label="Open alerts" value={String(alerts.length)} />
+        <Stat label="Open disputes" value={String(openDisputes.length)} />
         <Stat label="Corridors" value="3" ghost="EUR/USD ↔ INR" />
+      </div>
+
+      <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Disputes</h2>
+      <div className="grid" style={{ marginBottom: 24 }}>
+        {openDisputes.map((d) => (
+          <div key={d.id} className="card">
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <div>Payment <span className="mono">{d.paymentId.slice(0, 8)}…</span> · raised by {d.raisedByRole}</div>
+              <Chip value="DISPUTED" />
+            </div>
+            <div className="agent" style={{ marginTop: 10 }}>{d.reason}</div>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="btn" onClick={() => resolveDispute(d.id, 'REFUND')}>Refund (reverse)</button>
+              <button className="btn ghost" onClick={() => resolveDispute(d.id, 'DISMISS')}>Dismiss</button>
+            </div>
+          </div>
+        ))}
+        {openDisputes.length === 0 && <div className="card muted">No open disputes.</div>}
       </div>
 
       <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Compliance queue</h2>

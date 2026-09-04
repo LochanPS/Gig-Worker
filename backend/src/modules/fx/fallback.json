@@ -1,0 +1,10 @@
+{
+  "note": "Offline FX snapshot (ECB mid-market, approx). Used when FX_OFFLINE=true or a live fetch fails, so the demo never depends on network (NFR-4). Rates are units of quote per 1 unit of base.",
+  "asOf": "2026-09-01",
+  "base": "EUR",
+  "rates": {
+    "EUR": 1,
+    "USD": 1.086,
+    "INR": 90.24
+  }
+}

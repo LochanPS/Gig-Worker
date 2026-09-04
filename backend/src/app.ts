@@ -1,66 +1,57 @@
-import Fastify, { type FastifyInstance } from "fastify";
-import cors from "@fastify/cors";
-import jwt from "@fastify/jwt";
-import websocket from "@fastify/websocket";
-import { ZodError } from "zod";
-import { config } from "./lib/config.js";
-import { ApiError } from "./lib/errors.js";
-import { authRoutes } from "./auth/routes.js";
-import { identityRoutes } from "./identity/routes.js";
-import { fxRoutes } from "./fx/routes.js";
-import { paymentRoutes } from "./payments/routes.js";
-import { invoiceRoutes } from "./invoices/routes.js";
-import { adminRoutes } from "./admin/routes.js";
-import { documentRoutes } from "./documents/routes.js";
-import { notificationRoutes } from "./notifications/routes.js";
-import { wsRoutes } from "./ws/routes.js";
-import { startMetricsTicker } from "./admin/ticker.js";
+// Fastify app factory — registers plugins and route modules.
+// Modules land here as P2 build steps complete (auth -> payments -> fx -> admin...).
+import Fastify, { type FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
+import jwt from '@fastify/jwt';
+import websocket from '@fastify/websocket';
+import { ZodError } from 'zod';
+import { env } from './lib/env.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
+import { paymentRoutes } from './modules/payments/payment.routes.js';
+import { registerComplianceEngine } from './modules/compliance/engine.js';
+import { complianceRoutes } from './modules/compliance/compliance.routes.js';
+import { invoiceRoutes } from './modules/invoices/invoice.routes.js';
+import { documentRoutes } from './modules/documents/document.routes.js';
+import { verificationRoutes } from './modules/verification/verification.routes.js';
+import { payRunRoutes } from './modules/payrun/payrun.routes.js';
+import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
+import { payoutAccountRoutes } from './modules/payouts/payout-account.routes.js';
+import { disputeRoutes } from './modules/disputes/dispute.routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" } });
+  const app = Fastify({ logger: { level: env.NODE_ENV === 'test' ? 'silent' : 'info' } });
+
+  registerComplianceEngine();
 
   await app.register(cors, { origin: true });
-  await app.register(jwt, { secret: config.jwtSecret, sign: { expiresIn: "12h" } });
+  await app.register(jwt, { secret: env.JWT_SECRET });
   await app.register(websocket);
 
-  // Uniform error envelope: {error:{code,message}} with proper HTTP status.
   app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof ApiError) {
-      return reply.code(err.statusCode).send({ error: { code: err.code, message: err.message } });
-    }
     if (err instanceof ZodError) {
-      return reply.code(400).send({
-        error: { code: "VALIDATION", message: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") },
-      });
+      return reply.code(400).send({ error: { code: 'VALIDATION', message: err.errors[0]?.message ?? 'Invalid input', issues: err.errors } });
     }
-    app.log.error(err);
-    const e = err as { statusCode?: number; message?: string };
-    const status = e.statusCode ?? 500;
-    return reply.code(status).send({
-      error: { code: "INTERNAL", message: status === 500 ? "Internal server error" : e.message ?? "Error" },
-    });
+    reply.log.error(err);
+    return reply.code(err.statusCode ?? 500).send({ error: { code: 'INTERNAL', message: err.message } });
   });
 
-  app.get("/health", async () => ({ ok: true, ts: new Date().toISOString() }));
+  app.get('/health', async () => ({ ok: true }));
 
-  // REST under /api/v1
   await app.register(
     async (api) => {
       await api.register(authRoutes);
-      await api.register(identityRoutes);
-      await api.register(fxRoutes);
       await api.register(paymentRoutes);
+      await api.register(complianceRoutes);
       await api.register(invoiceRoutes);
-      await api.register(adminRoutes);
       await api.register(documentRoutes);
-      await api.register(notificationRoutes);
+      await api.register(verificationRoutes);
+      await api.register(payRunRoutes);
+      await api.register(scheduleRoutes);
+      await api.register(payoutAccountRoutes);
+      await api.register(disputeRoutes);
     },
-    { prefix: "/api/v1" },
+    { prefix: '/api/v1' },
   );
 
-  // WebSocket at /ws
-  await app.register(wsRoutes);
-
-  startMetricsTicker();
   return app;
 }

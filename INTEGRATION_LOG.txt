@@ -164,3 +164,40 @@ INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared mu
   VERIFIED: shared build clean; backend typecheck + 45 tests green (was 34, +11
     schema tests); frontend typecheck + vite production build clean. Migration is
     additive and not yet applied to any live DB (run prisma migrate deploy on P4).
+
+[2026-09-04] UNHAPPY PATHS: KYC-fail + payout accounts + disputes/reversals
+  Motivation: the product-scope gap analysis (branch claude/product-scope-roadmap;
+  note: it read the DOCS-ONLY default branch and wrongly concluded "no code" — the
+  real product is on main). Its #3 (unhappy-path screens real regulated apps must
+  show) is the genuine gap; this builds it. All additive to the proven happy path.
+  SHARED CONTRACT CHANGED (logged):
+  - enums.ts: PAYMENT_STATES += PAYOUT_FAILED, DISPUTED, REVERSED (additive; happy
+    path DRAFT..COMPLETED unchanged). Added DISPUTE_STATUSES/DisputeStatus.
+  - schemas.ts: addPayoutAccountSchema, raiseDisputeSchema, resolveDisputeSchema.
+  - types.ts: PayoutAccount, Dispute; VerificationResult gained `reason` (rejection).
+  STATE MACHINE (state.ts): RATE_LOCKED -> PAYOUT_FAILED; PAYOUT_FAILED -> RATE_LOCKED|
+    REFUNDED; COMPLETED -> DISPUTED; DISPUTED -> REVERSED|COMPLETED; REVERSED terminal.
+    COMPLETED is no longer terminal (dispute window) — state.test.ts updated accordingly.
+  PRISMA: PaymentState += 3 values; new enum DisputeStatus; new models PayoutAccount,
+    Dispute (+ User/Payment relations). Migration 20260904130000_unhappy_paths
+    (ALTER TYPE ADD VALUE + 2 tables). Additive; not applied to any live DB.
+  BACKEND:
+  - verification: KYC/KYB can now be REJECTED (sanctions hit / short tax-id /
+    documentRef contains "fail") with a reason + resubmit; success message now points
+    to adding a payout account. (Real onboarding that can fail — FR-1.)
+  - payouts module: add/list/deactivate payout accounts + hasActivePayoutAccount().
+    confirmPayment gates on it: no active dst-currency account -> PAYOUT_FAILED (not
+    funded). retryPayout() re-drives a failed payout once an account exists.
+  - disputes module: either party opens a dispute on a COMPLETED payment -> DISPUTED;
+    admin resolves REFUND (escrow refund -> REVERSED) or DISMISS (-> COMPLETED).
+    Reuses the settlement seam's refund(); notifies both parties + admins.
+  - seed.ts: verified demo freelancers get an INR payout account so the happy path
+    + real-chain e2e stay green; new self-serve signups add theirs via the UI.
+  - app.ts registers payoutAccountRoutes + disputeRoutes; payment.routes adds /retry.
+  FRONTEND: api client methods; freelancer Payout methods page (+nav); PaymentDetail
+    gains raise-dispute (party, COMPLETED), retry-payout (company, PAYOUT_FAILED), and
+    DISPUTED/PAYOUT_FAILED banners; Verify page shows rejection reason; Admin Monitor
+    gains a Disputes queue (Refund/Dismiss) + open-disputes stat.
+  VERIFIED: shared build clean; backend typecheck + 56 tests green (was 45, +11);
+    frontend typecheck + vite production build clean. Migration additive, not yet
+    applied to any live DB (prisma migrate deploy at hosting time).

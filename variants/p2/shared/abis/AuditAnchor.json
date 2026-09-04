@@ -1,0 +1,37 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "anchor",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "Anchored",
+      "inputs": [
+        {
+          "name": "hash",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "timestamp",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    }
+  ],
+  "bytecode": "0x608060405234801561000f575f80fd5b5060c38061001c5f395ff3fe6080604052348015600e575f80fd5b50600436106026575f3560e01c8063eecdf92714602a575b5f80fd5b603960353660046077565b603b565b005b807ffde54488b5523b3abf19b99976dd0e2c531fbcd233d0eb682c96c3a18cf6b3c142604051606c91815260200190565b60405180910390a250565b5f602082840312156086575f80fd5b503591905056fea264697066735822122077051b93473735fe40a1943a3e0cf70bc19afcaf35cdd142a5f14b7ae5454ae364736f6c63430008180033"
+}

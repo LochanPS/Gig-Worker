@@ -1,4 +1,4 @@
-// GigBridge data model — TRD 4.1. Amounts are integers in minor units.
+// GigBridge data model (TRD 4.1). Amounts are integers in minor units.
 generator client {
   provider = "prisma-client-js"
 }
@@ -20,12 +20,6 @@ enum KycStatus {
   REJECTED
 }
 
-enum KybStatus {
-  PENDING
-  VERIFIED
-  REJECTED
-}
-
 enum PayoutPreference {
   AUTO_CONVERT
   HOLD
@@ -42,6 +36,15 @@ enum PaymentState {
   COMPLETED
   REFUNDED
   EXPIRED
+  PAYOUT_FAILED
+  DISPUTED
+  REVERSED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_REFUND
+  RESOLVED_DISMISS
 }
 
 enum Verdict {
@@ -57,165 +60,273 @@ enum AlertType {
   SANCTIONS
 }
 
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 enum InvoiceStatus {
-  OPEN
+  SENT
   APPROVED
-  CANCELLED
+  PAID
+}
+
+enum PayRunStatus {
+  DRAFT
+  REVIEWED
+  CONFIRMED
+  COMPLETED
+  PARTIAL
+}
+
+enum Cadence {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
 }
 
 model User {
-  id           String   @id @default(uuid())
-  role         Role
-  email        String   @unique
-  passwordHash String
-  country      String
-  name         String
+  id            String   @id @default(uuid())
+  role          Role
+  email         String   @unique
+  passwordHash  String
+  country       String // ISO alpha-2
+  name          String
   walletAddress String?
-  createdAt    DateTime @default(now())
+  walletKey     String? // DEMO ONLY — custodial demo wallet private key
+  createdAt     DateTime @default(now())
 
-  companyProfile    CompanyProfile?
-  freelancerProfile FreelancerProfile?
-  credentials       Credential[]
-  paymentsAsCompany    Payment[] @relation("CompanyPayments")
-  paymentsAsFreelancer Payment[] @relation("FreelancerPayments")
-  notifications     Notification[]
-  invoicesRaised    Invoice[] @relation("InvoiceFreelancer")
-  invoicesReceived  Invoice[] @relation("InvoiceCompany")
-  auditLogs         AuditLog[]
+  company       CompanyProfile?
+  freelancer    FreelancerProfile?
+  credentials   Credential[]
+  notifications Notification[]
+
+  paymentsSent     Payment[] @relation("CompanyPayments")
+  paymentsReceived Payment[] @relation("FreelancerPayments")
+  invoicesRaised   Invoice[] @relation("FreelancerInvoices")
+  invoicesReceived Invoice[] @relation("CompanyInvoices")
+  payRuns          PayRun[]  @relation("CompanyPayRuns")
+  schedulesCreated PayoutSchedule[] @relation("CompanySchedules")
+  schedulesReceived PayoutSchedule[] @relation("FreelancerSchedules")
+  payoutAccounts   PayoutAccount[]
+  disputesRaised   Dispute[] @relation("DisputeRaiser")
+  disputesResolved Dispute[] @relation("DisputeResolver")
 }
 
 model CompanyProfile {
-  userId    String   @id
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String    @id
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   legalName String
   regNumber String
   country   String
-  kybStatus KybStatus @default(PENDING)
-  // DEMO ONLY: server-generated custodial wallet private key, plaintext.
-  demoWalletKey String?
+  kybStatus KycStatus @default(PENDING)
 }
 
 model FreelancerProfile {
-  userId          String   @id
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fullName        String
-  country         String
-  panOrTaxId      String?
-  kycStatus       KycStatus @default(PENDING)
+  userId           String           @id
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  country          String
+  panOrTaxId       String?
+  kycStatus        KycStatus        @default(PENDING)
   payoutPreference PayoutPreference @default(AUTO_CONVERT)
-  // DEMO ONLY: server-generated custodial wallet private key, plaintext.
-  demoWalletKey   String?
 }
 
 model Credential {
-  id             String   @id @default(uuid())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  did            String
-  // Encrypted at rest (AES-256-GCM). Only the hash goes on-chain (GDPR).
-  credentialJson String
-  hash           String
-  issuedAt       DateTime @default(now())
-  expiresAt      DateTime
-  revoked        Boolean  @default(false)
-  anchorTxHash   String?
-
-  @@index([userId])
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  did          String
+  credentialJs String // encrypted off-chain credential JSON (AES-256-GCM)
+  hash         String // keccak256 mirrored to IdentityRegistry
+  issuedAt     DateTime @default(now())
+  expiresAt    DateTime
+  revoked      Boolean  @default(false)
+  anchorTxHash String?
 }
 
 model FxRate {
-  id         String   @id @default(uuid())
-  pair       String
-  midRate    Float
-  lockedRate Float?
+  id          String   @id @default(uuid())
+  pair        String
+  midRate     Float
+  lockedRate  Float?
   lockedUntil DateTime?
-  source     String
-  fetchedAt  DateTime @default(now())
-
-  payments   Payment[]
-
-  @@index([pair, fetchedAt])
+  source      String
+  fetchedAt   DateTime @default(now())
+  payments    Payment[]
 }
 
 model Payment {
-  id             String   @id @default(uuid())
-  companyId      String
-  company        User     @relation("CompanyPayments", fields: [companyId], references: [id])
-  freelancerId   String
-  freelancer     User     @relation("FreelancerPayments", fields: [freelancerId], references: [id])
+  id                   String        @id @default(uuid())
+  companyId            String
+  company              User          @relation("CompanyPayments", fields: [companyId], references: [id])
+  freelancerId         String
+  freelancer           User          @relation("FreelancerPayments", fields: [freelancerId], references: [id])
+  srcCurrency          String
+  dstCurrency          String
+  srcAmountMinor       Int
+  dstAmountMinor       Int?
+  feeAmountMinor       Int?
+  fxRateId             String?
+  fxRate               FxRate?       @relation(fields: [fxRateId], references: [id])
+  purposeCode          String?
+  invoiceRef           String?
+  payRunId             String?
+  payRun               PayRun?       @relation(fields: [payRunId], references: [id])
+  scheduleId           String?
+  schedule             PayoutSchedule? @relation(fields: [scheduleId], references: [id])
+  state                PaymentState  @default(DRAFT)
+  escrowId             String? // keccak256(uuid) on-chain id
+  complianceDecisionId String?
+  txHashFund           String?
+  txHashRelease        String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  srcCurrency    String
-  dstCurrency    String
-  srcAmountMinor Int
-  dstAmountMinor Int?
-  feeAmountMinor Int?
-  fxRateId       String?
-  fxRate         FxRate?  @relation(fields: [fxRateId], references: [id])
-
-  purposeCode    String
-  invoiceRef     String?
-  state          PaymentState @default(DRAFT)
-
-  // keccak256(uuid) escrow id used on-chain
-  escrowId       String?
-  txHashFund     String?
-  txHashRelease  String?
-
-  complianceDecisionId String? @unique
-  complianceDecision   ComplianceDecision? @relation(fields: [complianceDecisionId], references: [id])
-
-  timeline       TimelineEntry[]
-  alerts         Alert[]
-
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  completedAt    DateTime?
+  decision   ComplianceDecision?
+  timeline   TimelineStep[]
+  alerts     Alert[]
+  invoice    Invoice?
+  disputes   Dispute[]
 
   @@index([companyId])
   @@index([freelancerId])
   @@index([state])
-  @@index([createdAt])
+  @@index([payRunId])
+  @@index([scheduleId])
 }
 
-model TimelineEntry {
+// Batch pay-run (FR-2.5): one action pays N freelancers. The run is the parent of
+// N child Payments, each of which flows through the normal orchestrator/state
+// machine. status summarises the children (see shared PayRunStatus).
+model PayRun {
+  id        String       @id @default(uuid())
+  companyId String
+  company   User         @relation("CompanyPayRuns", fields: [companyId], references: [id])
+  status    PayRunStatus @default(DRAFT)
+  note      String?
+  payments  Payment[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([companyId])
+}
+
+// Recurring payout schedule (retainer). runDueSchedules() creates a normal
+// Payment via the orchestrator when nextRunAt passes, then advances nextRunAt.
+model PayoutSchedule {
+  id             String    @id @default(uuid())
+  companyId      String
+  company        User      @relation("CompanySchedules", fields: [companyId], references: [id])
+  freelancerId   String
+  freelancer     User      @relation("FreelancerSchedules", fields: [freelancerId], references: [id])
+  srcCurrency    String
+  dstCurrency    String
+  srcAmountMinor Int
+  purposeCode    String
+  cadence        Cadence
+  active         Boolean   @default(true)
+  nextRunAt      DateTime
+  lastRunAt      DateTime?
+  runCount       Int       @default(0)
+  payments       Payment[]
+  createdAt      DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([active, nextRunAt])
+}
+
+model TimelineStep {
   id        String   @id @default(uuid())
   paymentId String
   payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  state     PaymentState
-  note      String?
+  key       String
+  label     String
+  state     PaymentState?
+  actor     String?
   txHash    String?
+  detail    Json?
   at        DateTime @default(now())
 
-  @@index([paymentId, at])
+  @@index([paymentId])
 }
 
 model ComplianceDecision {
   id              String   @id @default(uuid())
-  paymentId       String
+  paymentId       String   @unique
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   verdict         Verdict
-  ruleResultsJson Json
+  ruleResults     Json
   agentExplanation String
   anchorTxHash    String?
   reviewedBy      String?
   reviewNote      String?
   createdAt       DateTime @default(now())
-
-  payment         Payment?
-
-  @@index([paymentId])
 }
 
 model Alert {
-  id          String   @id @default(uuid())
-  type        AlertType
-  paymentId   String?
-  payment     Payment? @relation(fields: [paymentId], references: [id])
-  severity    String
-  detailsJson Json
-  resolved    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id        String        @id @default(uuid())
+  type      AlertType
+  severity  AlertSeverity
+  paymentId String?
+  payment   Payment?      @relation(fields: [paymentId], references: [id])
+  details   Json
+  resolved  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+}
 
-  @@index([resolved, createdAt])
+model Invoice {
+  id           String        @id @default(uuid())
+  freelancerId String
+  freelancer   User          @relation("FreelancerInvoices", fields: [freelancerId], references: [id])
+  companyId    String
+  company      User          @relation("CompanyInvoices", fields: [companyId], references: [id])
+  amountMinor  Int
+  currency     String
+  memo         String
+  status       InvoiceStatus @default(SENT)
+  paymentId    String?       @unique
+  payment      Payment?      @relation(fields: [paymentId], references: [id])
+  createdAt    DateTime      @default(now())
+}
+
+// Where a freelancer's off-ramped fiat actually lands (the "add bank account"
+// screen the demo skipped). accountNumber is stored masked — demo only.
+model PayoutAccount {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label               String
+  currency            String
+  accountName         String
+  accountNumberMasked String
+  bankIdentifier      String
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+
+  @@index([userId])
+}
+
+// A dispute opened on a payment. OPEN holds the payment in DISPUTED until an admin
+// resolves it (RESOLVED_REFUND -> REVERSED, RESOLVED_DISMISS -> COMPLETED).
+model Dispute {
+  id             String        @id @default(uuid())
+  paymentId      String
+  payment        Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  raisedById     String
+  raisedBy       User          @relation("DisputeRaiser", fields: [raisedById], references: [id])
+  raisedByRole   Role
+  reason         String
+  status         DisputeStatus @default(OPEN)
+  resolutionNote String?
+  resolvedById   String?
+  resolvedBy     User?         @relation("DisputeResolver", fields: [resolvedById], references: [id])
+  createdAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+
+  @@index([paymentId])
+  @@index([status])
 }
 
 model Notification {
@@ -223,42 +334,21 @@ model Notification {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind      String
-  title     String
-  body      String
+  message   String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@index([userId, read])
-}
-
-model Invoice {
-  id           String   @id @default(uuid())
-  freelancerId String
-  freelancer   User     @relation("InvoiceFreelancer", fields: [freelancerId], references: [id])
-  companyId    String
-  company      User     @relation("InvoiceCompany", fields: [companyId], references: [id])
-  amountMinor  Int
-  currency     String
-  memo         String
-  status       InvoiceStatus @default(OPEN)
-  paymentId    String?
-  createdAt    DateTime @default(now())
-
-  @@index([companyId, status])
-  @@index([freelancerId])
+  @@index([userId])
 }
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String?
-  actor      User?    @relation(fields: [actorId], references: [id])
-  action     String
-  entity     String
-  entityId   String
-  beforeJson Json?
-  afterJson  Json?
-  at         DateTime @default(now())
+  id        String   @id @default(uuid())
+  actor     String
+  action    String
+  entity    String
+  before    Json?
+  after     Json?
+  at        DateTime @default(now())
 
-  @@index([entity, entityId])
-  @@index([at])
+  @@index([entity])
 }

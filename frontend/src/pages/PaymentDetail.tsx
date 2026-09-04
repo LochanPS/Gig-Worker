@@ -4,18 +4,44 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import type { Payment } from '@gigbridge/shared';
 import { api, getToken } from '../lib/api.js';
+import { useAuth } from '../lib/auth.js';
 import { useWs } from '../lib/ws.js';
 import { money, Chip } from '../components/bits.js';
 import Timeline from '../components/Timeline.js';
 
 export default function PaymentDetail({ backTo }: { backTo: string }) {
   const { id = '' } = useParams();
+  const { user } = useAuth();
   const [p, setP] = useState<Payment | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
   const load = () => api.payment(id).then(setP).catch(() => {});
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
   useWs((e) => { if (e.type === 'payment.state' && e.paymentId === id) load(); });
 
+  const raiseDispute = async () => {
+    setErr(''); setMsg(''); setBusy(true);
+    try { await api.raiseDispute(id, reason || 'Work not delivered as agreed'); setReason(''); setMsg('Dispute opened — payment held pending review.'); await load(); }
+    catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const retryPayout = async () => {
+    if (!p) return;
+    setErr(''); setMsg(''); setBusy(true);
+    try {
+      const q = await api.quote(`${p.srcCurrency}${p.dstCurrency}`, p.srcAmountMinor);
+      await api.retryPayout(id, q.quoteId);
+      setMsg('Payout retried.'); await load();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   if (!p) return <div className="muted">Loading…</div>;
+  const isParty = user?.id === p.companyId || user?.id === p.freelancerId;
+  const isCompany = user?.role === 'COMPANY';
   const docUrl = (kind: 'receipt' | 'compliance') =>
     `/api/v1/payments/${p.id}/${kind}.pdf`; // opened with token via fetch below
 
@@ -56,6 +82,41 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
           </div>
         </div>
       </div>
+
+      {/* Unhappy-path actions */}
+      {p.state === 'PAYOUT_FAILED' && (
+        <div className="card" style={{ marginTop: 18, borderLeft: '3px solid var(--reject)' }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Payout failed</h2>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            The payee has no active {p.dstCurrency} payout account, so the money had nowhere to land.
+            Once they add one, retry.
+          </p>
+          {isCompany && <button className="btn" onClick={retryPayout} disabled={busy}>{busy ? 'Retrying…' : 'Retry payout'}</button>}
+        </div>
+      )}
+
+      {p.state === 'DISPUTED' && (
+        <div className="card" style={{ marginTop: 18, borderLeft: '3px solid var(--flag, #d97706)' }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 6px' }}>Under dispute</h2>
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>Funds are held pending admin review. Resolution reverses or restores the payment.</p>
+        </div>
+      )}
+
+      {p.state === 'COMPLETED' && isParty && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 10px' }}>Raise a dispute</h2>
+          <div className="row" style={{ alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label>Reason</label>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. work not delivered" />
+            </div>
+            <button className="btn ghost" onClick={raiseDispute} disabled={busy}>Open dispute</button>
+          </div>
+        </div>
+      )}
+
+      {msg && <div className="muted" style={{ marginTop: 12 }}>{msg}</div>}
+      {err && <div className="err">{err}</div>}
     </>
   );
 }

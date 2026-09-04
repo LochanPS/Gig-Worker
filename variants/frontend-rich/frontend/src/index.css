@@ -1,0 +1,192 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---- Typography. Self-hosted, no external font host. ---- */
+@font-face {
+  font-family: "Satoshi";
+  src: url("/fonts/Satoshi-Variable.woff2") format("woff2-variations");
+  font-weight: 300 900;
+  font-display: swap;
+  font-style: normal;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 800;
+  font-display: swap;
+  font-style: normal;
+}
+
+@theme {
+  --color-bg: #0A0A0B;
+  --color-surface: #121214;
+  --color-raised: #18181B;
+  --color-line: #232327;
+  --color-line-strong: #34343A;
+  --color-text: #EDEDEF;
+  --color-muted: #8A8A94;
+  --color-faint: #5A5A63;
+  --color-accent: #C2571A;
+  --color-accent-hover: #D96A2A;
+  --color-ok: #2F7D5B;
+  --color-warn: #9A6B1F;
+  --color-danger: #8F3231;
+  --color-info: #3D5A80;
+
+  --font-sans: "Satoshi", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  --radius-sharp: 2px;
+}
+
+:root {
+  color-scheme: dark;
+  --chart-1: oklch(0.32 0 none);
+  --chart-2: oklch(0.41 0 none);
+  --chart-3: oklch(0.54 0 none);
+  --chart-4: oklch(0.71 0 none);
+  --chart-5: oklch(0.89 0 none);
+  --chart-background: oklch(1 0 0);
+  --chart-foreground: oklch(0.145 0.004 285);
+  --chart-foreground-muted: oklch(0.55 0.014 260);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-2);
+  --chart-crosshair: oklch(0.4 0.1828 274.34);
+  --chart-grid: oklch(0.9 0 0);
+  --chart-brush-border: var(--chart-grid);
+  --chart-tooltip-background: oklch(0.21 0.006 285 / 0.8);
+  --chart-tooltip-foreground: oklch(0.985 0 0);
+  --chart-tooltip-muted: oklch(0.65 0.01 260);
+  --chart-marker-background: oklch(0.97 0.005 260);
+  --chart-marker-border: oklch(0.85 0.01 260);
+  --chart-marker-foreground: oklch(0.3 0.01 260);
+  --chart-label: oklch(0.45 0.01 260);
+  --chart-scale-01: oklch(0.98 0.003 106);
+  --chart-scale-02: oklch(0.92 0.008 106);
+  --chart-scale-03: oklch(0.82 0.015 106);
+  --chart-scale-04: oklch(0.68 0.02 106);
+  --chart-scale-05: oklch(0.55 0.025 106);
+  --chart-scale-pattern-color: oklch(0.96 0.005 106);
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html, body, #root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Single radius across the entire application. */
+button, input, select, textarea, .panel, .chip, [role="dialog"], [role="menu"] {
+  border-radius: 2px;
+}
+
+h1, h2, h3, h4 { text-wrap: balance; margin: 0; font-weight: 500; }
+p { margin: 0; }
+
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+/* Focus is always visible. */
+:focus-visible {
+  outline: 2px solid var(--color-line-strong);
+  outline-offset: 2px;
+}
+
+/* Cursor never changes beyond the two system defaults. */
+button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"]),
+[role="option"], [role="tab"], summary { cursor: pointer; }
+button:disabled, [aria-disabled="true"] { cursor: default; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-line); border: 2px solid var(--color-bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-line-strong); }
+
+@keyframes chippulse {
+  0%, 100% { border-color: currentColor; opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.chip-pulse { animation: chippulse 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---- Chart tokens. Bound to the GigBridge palette, never rainbow. ---- */
+:root {
+  --chart-1: #C2571A;
+  --chart-2: #2F7D5B;
+  --chart-3: #3D5A80;
+  --chart-4: #9A6B1F;
+  --chart-5: #8A8A94;
+  --chart-background: transparent;
+  --chart-foreground: #8A8A94;
+  --chart-foreground-muted: #5A5A63;
+  --chart-crosshair: #34343A;
+  --chart-grid: #232327;
+  --chart-brush-border: #34343A;
+  --chart-line-primary: #C2571A;
+  --chart-line-secondary: #3D5A80;
+  --chart-tooltip-background: #18181B;
+  --chart-tooltip-foreground: #EDEDEF;
+  --chart-tooltip-muted: #8A8A94;
+  --chart-marker-background: #18181B;
+  --chart-marker-border: #34343A;
+  --chart-marker-foreground: #EDEDEF;
+  --chart-label: #8A8A94;
+  --chart-scale-01: #1C1C20;
+  --chart-scale-02: #2E2A28;
+  --chart-scale-03: #4A3A2C;
+  --chart-scale-04: #7A4620;
+  --chart-scale-05: #C2571A;
+  --chart-scale-pattern-color: #0A0A0B;
+}
+
+@theme inline {
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-background: var(--chart-background);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-crosshair: var(--chart-crosshair);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-marker-background: var(--chart-marker-background);
+  --color-chart-marker-border: var(--chart-marker-border);
+  --color-chart-marker-foreground: var(--chart-marker-foreground);
+  --color-chart-label: var(--chart-label);
+  --color-chart-scale-01: var(--chart-scale-01);
+  --color-chart-scale-02: var(--chart-scale-02);
+  --color-chart-scale-03: var(--chart-scale-03);
+  --color-chart-scale-04: var(--chart-scale-04);
+  --color-chart-scale-05: var(--chart-scale-05);
+  --color-chart-scale-pattern-color: var(--chart-scale-pattern-color);
+}
