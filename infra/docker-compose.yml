@@ -1,5 +1,9 @@
-# GigBridge local stack. `docker compose -f infra/docker-compose.yml up`
-# Skeleton — backend/frontend build stages are filled in as those tracks land.
+# GigBridge local stack — the whole demo from one command (NFR-4):
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# Boots postgres, an anvil dev chain, the backend (migrate -> seed -> serve) and
+# the frontend. Build context is the repo root because backend and frontend both
+# depend on the shared workspace package.
 services:
   postgres:
     image: postgres:16-alpine
@@ -23,10 +27,63 @@ services:
     entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337"]
     ports:
       - "8545:8545"
+    healthcheck:
+      test: ["CMD-SHELL", "cast block-number --rpc-url http://localhost:8545 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  # backend:  (filled in by P2 once Dockerfile exists — auto-migrate, deploy
-  #            contracts on boot, seed, then serve :4000)
-  # frontend: (filled in by P3 — Vite build served on :5173)
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      anvil:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://gigbridge:gigbridge@postgres:5432/gigbridge
+      JWT_SECRET: dev-only-change-me
+      RPC_URL: http://anvil:8545
+      CHAIN_ID: "31337"
+      # anvil well-known account 0 — DEMO ONLY, publicly known, never holds real funds
+      PLATFORM_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      DEPLOYER_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      # Empty key => deterministic template explanations, so the stack needs no
+      # network at all once the images are built (NFR-4, ROADMAP risk R2).
+      ANTHROPIC_API_KEY: ""
+      FX_API_URL: https://api.frankfurter.app
+      FX_OFFLINE: "true"
+      PORT: "4000"
+      NODE_ENV: production
+    # Schema, then demo data, then serve. Idempotent: re-running `up` re-applies
+    # nothing and re-seeds onto the same fixed demo ids.
+    command: >
+      sh -c "pnpm --filter ./backend exec prisma migrate deploy &&
+             pnpm --filter ./backend db:seed &&
+             pnpm --filter ./backend exec tsx src/index.ts"
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        # The SPA runs in the user's browser, so it reaches the backend on the
+        # host's published port, not the compose network name.
+        VITE_API_BASE: http://localhost:4000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:5173"
 
 volumes:
   pgdata:

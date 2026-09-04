@@ -15,7 +15,7 @@ const P = '/api/v1';
 const token = (id: string) => `mock-jwt.${id}`;
 const userList = Object.values(users);
 const byToken = (t?: string) => userList.find((u) => token(u.id) === (t ?? '').replace('Bearer ', ''));
-const strip = (u: (typeof userList)[number]) => { const { password, ...rest } = u; return rest; };
+const strip = (u: (typeof userList)[number]) => { const { password: _password, ...rest } = u; return rest; };
 
 // --- auth ---
 app.post(`${P}/auth/register`, async (req, reply) => {
