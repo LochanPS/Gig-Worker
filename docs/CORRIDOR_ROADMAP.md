@@ -5,6 +5,10 @@ doc: what exists, how to work on it, and the ordered plan for what's next. Where
 it conflicts with older docs (`GO_LIVE_PLAN.md`, `ROADMAP_SIMPLE.txt`,
 `ROADMAP_3_PERSON_3_DAY.txt`), this wins. Build on other devices from this file.*
 
+**Companion docs (2026-09-05):** `CORRIDOR_V2_IMPLEMENTED.md` is the detailed as-built
+(expansion of §3); `SESSION_CAPTURE_2026-09-05.md` captures the parallel "freelance-escrow"
+session and specifies the **UPI / INR off-ramp last mile** (the main demo-relevant gap).
+
 ---
 
 ## 0. What Corridor is
