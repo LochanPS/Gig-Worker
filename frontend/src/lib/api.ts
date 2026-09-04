@@ -14,19 +14,33 @@ const API_ORIGIN = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
 const BASE = `${API_ORIGIN}/api/v1`;
 const TOKEN_KEY = 'gb_token';
 
+// A hosted frontend with no VITE_API_BASE would call its own origin's /api/*,
+// which the SPA rewrite answers with index.html (a 405/HTML) — a confusing error.
+// Detect that misconfig up front and fail with an actionable message instead.
+const onLocalhost = typeof location !== 'undefined' && /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
+const API_MISCONFIGURED = !API_ORIGIN && !onLocalhost;
+
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t: string | null) =>
   t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(BASE + path, {
-    ...opts,
-    headers: {
-      'content-type': 'application/json',
-      ...(getToken() ? { authorization: `Bearer ${getToken()}` } : {}),
-      ...(opts.headers ?? {}),
-    },
-  });
+  if (API_MISCONFIGURED) {
+    throw new Error('Backend not configured: set VITE_API_BASE to your API URL (e.g. your Railway backend) and redeploy the frontend.');
+  }
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      ...opts,
+      headers: {
+        'content-type': 'application/json',
+        ...(getToken() ? { authorization: `Bearer ${getToken()}` } : {}),
+        ...(opts.headers ?? {}),
+      },
+    });
+  } catch {
+    throw new Error(`Cannot reach the API at ${API_ORIGIN || location.origin}. Is the backend up and VITE_API_BASE correct?`);
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
