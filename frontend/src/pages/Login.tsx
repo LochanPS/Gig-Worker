@@ -34,7 +34,7 @@ export default function Login() {
   return (
     <div className="login">
       <form className="box card" onSubmit={submit}>
-        <div className="brand"><span className="dot" />GigBridge</div>
+        <div className="brand"><span className="dot">C</span>Corridor</div>
         <p className="sub">Cross-border freelancer payments</p>
 
         <div className="row" style={{ gap: 8, marginBottom: 14 }}>

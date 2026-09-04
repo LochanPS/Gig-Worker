@@ -33,7 +33,7 @@ export default function Invoices() {
   return (
     <>
       <h1 className="page">Invoices</h1>
-      <p className="sub">Raise a payment request; the company approves and you're paid through GigBridge.</p>
+      <p className="sub">Raise a payment request; the company approves and you're paid through Corridor.</p>
 
       <form className="card" style={{ marginBottom: 20 }} onSubmit={submit}>
         <div className="row">

@@ -34,8 +34,8 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="shell">
       <nav className="nav">
         <div className="brand">
-          <span className="dot">G</span>
-          <span>GigBridge<div className="sub-brand">Cross-border payouts</div></span>
+          <span className="dot">C</span>
+          <span>Corridor<div className="sub-brand">Cross-border payouts</div></span>
         </div>
 
         {user?.role === 'COMPANY' && <>

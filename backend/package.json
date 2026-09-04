@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "start": "prisma migrate deploy && tsx src/index.ts",
+    "seed:once": "tsx src/scripts/seed.ts",
     "mock": "tsx watch mock/server.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
