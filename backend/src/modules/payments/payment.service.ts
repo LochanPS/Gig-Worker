@@ -310,6 +310,28 @@ export async function refundPayment(paymentId: string, actor: Actor) {
   return getPaymentInternal(paymentId);
 }
 
+// Sweep rate locks that have run past their validity window. RATE_LOCKED ->
+// EXPIRED was declared in the state machine from the start but nothing ever
+// produced it, so a stale lock just sat there and could still be funded at a rate
+// the company never agreed to. Runs on a timer (index.ts) and on demand
+// (POST /admin/expire-locks). Returns the ids it expired.
+export async function expireStaleRateLocks(now: Date = new Date()): Promise<string[]> {
+  const stale = await prisma.payment.findMany({
+    where: { state: 'RATE_LOCKED', fxRate: { lockedUntil: { lt: now } } },
+    select: { id: true },
+  });
+  const expired: string[] = [];
+  for (const { id } of stale) {
+    try {
+      await transition(id, 'EXPIRED', { actor: 'system', extra: { reason: 'rate lock expired' } });
+      expired.push(id);
+    } catch {
+      // Raced with a confirm that already moved it on — leave it alone.
+    }
+  }
+  return expired;
+}
+
 async function appendStep(paymentId: string, key: string, actor: string) {
   const step = TIMELINE_STEPS.find((s) => s.key === key)!;
   await prisma.timelineStep.create({ data: { paymentId, key: step.key, label: step.label, state: step.state, actor } });

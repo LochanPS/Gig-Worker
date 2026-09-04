@@ -46,3 +46,12 @@ function safeSend(socket: WebSocket, event: WsEvent): void {
     /* dropped socket; close handler will clean it up */
   }
 }
+
+// Is anyone with the admin role connected? Lets the server skip work (metrics
+// ticks) that nothing would receive.
+export function hasAdmins(): boolean {
+  for (const c of conns) {
+    if (c.role === 'ADMIN') return true;
+  }
+  return false;
+}
