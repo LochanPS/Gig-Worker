@@ -8,17 +8,18 @@ import type {
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
-// In prod (frontend and backend on different origins), set VITE_API_BASE to the
-// backend origin, e.g. https://gigbridge-api.up.railway.app
-const API_ORIGIN = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+// In prod (frontend and backend on different origins), VITE_API_BASE sets the
+// backend origin. If it's not set on a hosted build, fall back to the known
+// Railway backend so the site still works instead of POSTing to its own origin
+// (which the SPA rewrite answers with a confusing 405). Override with the env var.
+const DEFAULT_HOSTED_API = 'https://gigbridgebackend-production.up.railway.app';
+const onLocalhost = typeof location !== 'undefined' && /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
+const CONFIGURED = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '');
+const API_ORIGIN = CONFIGURED || (onLocalhost ? '' : DEFAULT_HOSTED_API);
 const BASE = `${API_ORIGIN}/api/v1`;
 const TOKEN_KEY = 'gb_token';
 
-// A hosted frontend with no VITE_API_BASE would call its own origin's /api/*,
-// which the SPA rewrite answers with index.html (a 405/HTML) — a confusing error.
-// Detect that misconfig up front and fail with an actionable message instead.
-const onLocalhost = typeof location !== 'undefined' && /^(localhost|127\.|0\.0\.0\.0)/.test(location.hostname);
-const API_MISCONFIGURED = !API_ORIGIN && !onLocalhost;
+const API_MISCONFIGURED = false; // a hosted build always resolves to DEFAULT_HOSTED_API
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t: string | null) =>
