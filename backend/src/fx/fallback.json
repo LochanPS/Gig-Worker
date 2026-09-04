@@ -1,0 +1,16 @@
+{
+  "note": "Offline FX snapshot used when FX_OFFLINE=true or the live API is unreachable. Rates are mid-market, indicative, captured for demo determinism.",
+  "base": "EUR",
+  "rates": {
+    "EURINR": 90.25,
+    "USDINR": 83.10,
+    "INRUSD": 0.01203,
+    "EURUSD": 1.086,
+    "USDEUR": 0.921
+  },
+  "usdPer": {
+    "EUR": 1.086,
+    "USD": 1.0,
+    "INR": 0.01203
+  }
+}

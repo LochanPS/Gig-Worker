@@ -1,0 +1,23 @@
+INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared must be noted here in the same commit.
+=====================================================================
+
+2026-09-04  P2 (Backend & Agent)  SCAFFOLD MERGED
+  - pnpm monorepo scaffolded: shared/, backend/, contracts/ (P1 stub),
+    infra/, docs/ (planning .txt files moved here). frontend/ reserved for P3.
+  - /shared package published as the interface treaty: enums + entity types
+    (src/types.ts), zod request schemas (src/schemas.ts), websocket event
+    types (src/ws.ts) — all per BUILD_CONTRACTS sections 3-5. No changes to
+    the frozen contract itself.
+  - docker-compose skeleton (postgres + anvil + backend) + .env.example per
+    section 2 + trivial mock API server (backend/mock/server.ts) covering
+    every REST path in section 4 for P3 to build against.
+  - Full backend delivered on this branch: Prisma data model (TRD 4.1),
+    auth/JWT/RBAC, payment orchestrator state machine (TRD 4.2), FX service
+    with offline fallback, 10-rule compliance engine (TRD 4.5 + section 8
+    thresholds), agent service (Anthropic + template fallback, TRD 4.6),
+    anomaly detection, admin queue/alerts/metrics/rules, invoices, PDF docs,
+    websocket hub, seed + demo:reset (section 7).
+  - Settlement integration point: backend/src/settlement/ exposes a typed
+    interface; a SimulatedSettlement drives the pipeline with deterministic
+    tx hashes until P1's onchain.ts + contracts/deploy.ts + /shared/abis land.
+    Swap-in is a single factory branch (getSettlement()).

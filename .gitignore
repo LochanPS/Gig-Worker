@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+# Prisma generated client
+backend/src/generated/
+# Contract build artifacts land here from P1's deploy script
+shared/abis/addresses.local.json
+# Editor
+.idea/
+.vscode/

@@ -1,2 +1,0 @@
-INTEGRATION LOG — append-only. Any change to BUILD_CONTRACTS.txt or /shared must be noted here in the same commit.
-=====================================================================

@@ -1,0 +1,55 @@
+version: "3.9"
+
+# GigBridge demo stack. `docker compose up` boots postgres + anvil + backend.
+# The frontend (P3) and its service are added by that track.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gigbridge
+      POSTGRES_PASSWORD: gigbridge
+      POSTGRES_DB: gigbridge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gigbridge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    # deterministic mnemonic so demo wallet keys are stable across runs
+    command: ["anvil --host 0.0.0.0 --chain-id 31337"]
+    ports:
+      - "8545:8545"
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/backend.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      anvil:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://gigbridge:gigbridge@postgres:5432/gigbridge
+      JWT_SECRET: dev-only-change-me
+      RPC_URL: http://anvil:8545
+      CHAIN_ID: "31337"
+      FX_API_URL: https://api.frankfurter.app
+      FX_OFFLINE: "true"
+      FEE_BPS: "75"
+      FEE_MIN_USD: "1"
+      RATE_LOCK_MINUTES: "10"
+      PORT: "4000"
+    ports:
+      - "4000:4000"
+    # entrypoint migrates, deploys contracts (when P1 module present), seeds, serves
+    command: ["sh", "-c", "pnpm db:migrate && pnpm seed && pnpm --filter @gigbridge/backend start"]
+
+volumes:
+  pgdata:
