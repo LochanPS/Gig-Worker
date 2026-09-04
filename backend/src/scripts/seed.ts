@@ -28,7 +28,12 @@ const USERS: SeedUser[] = [
   { id: '44444444-4444-4444-4444-444444444444', role: 'FREELANCER', email: 'alex@demo.gg', name: 'Alex Carter', country: 'US', pan: 'US-TIN-88123', verified: true },
   { id: '55555555-5555-5555-5555-555555555555', role: 'FREELANCER', email: 'uma@demo.gg', name: 'Uma Rao', country: 'IN', pan: null, verified: false },
   // Sanctioned counterparty for scenario 2 (name matches the mock watchlist).
-  { id: '66666666-6666-6666-6666-666666666666', role: 'FREELANCER', email: 'sanctioned@demo.gg', name: 'SanctionedCo', country: 'IN', pan: null, verified: false },
+  // Deliberately VERIFIED: this models a party added to the SDN list AFTER being
+  // onboarded, which is exactly why screening happens per payment and not only at
+  // KYC. It also keeps the scenario honest now that a payment to an unverified
+  // payee is refused up front — the REJECT must come from US-OFAC-001 with the
+  // agent's reasoning, not from a missing KYC.
+  { id: '66666666-6666-6666-6666-666666666666', role: 'FREELANCER', email: 'sanctioned@demo.gg', name: 'SanctionedCo', country: 'IN', pan: 'SANC0001X', verified: true },
   { id: '99999999-9999-9999-9999-999999999999', role: 'ADMIN', email: 'admin@demo.gg', name: 'Platform Admin', country: 'IN', verified: true },
 ];
 
