@@ -256,3 +256,22 @@ OPS: backend + frontend Dockerfiles, both wired into infra/docker-compose.yml so
   `docker compose up` boots the whole stack (NFR-4); root eslint + prettier
   config (pnpm lint could not run at all before); GitHub Actions CI running
   typecheck, tests and lint.
+
+[2026-09-04] AI ADJUDICATION + CUSTOMER MGMT + DASHBOARDS v2
+  SHARED CONTRACT (logged): added createCustomerSchema + CustomerSummary type
+    (additive). No existing values changed. shared rebuilt.
+  BACKEND:
+  - agent/adjudicator.ts: triages FLAGged payments -> AUTO_CLEAR / AUTO_REJECT /
+    ESCALATE, confidence-gated (>=0.75). Safety floor: sanctions/structuring/
+    >USD25k always escalate; LLM when ANTHROPIC_API_KEY set else heuristic; errors
+    leave FLAGGED. Wired into payment.service createPayment FLAG branch; recorded on
+    ComplianceDecision + audit. env AI_ADJUDICATION (default true). 6 unit tests.
+  - customers module: GET /customers (admin all / company freelancers), GET
+    /customers/:id, POST /customers (company->freelancer, admin->either; verified
+    provisions wallet+credential so a new freelancer is payable via
+    /directory/freelancers). Registered in app.ts.
+  FRONTEND: Customers page (company+admin nav); Operator monitor v2 (metrics row +
+    AI-adjudication summary + escalations-only queue); Company Overview v2 (quick
+    actions, needs-attention tile, corridor mix). Removed agent-panel left border.
+  VERIFIED: shared build; backend typecheck + 109 tests; frontend typecheck + vite
+    build — all green. See docs/AI_ADJUDICATION_AND_OPERATIONS.md.
