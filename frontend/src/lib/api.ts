@@ -2,7 +2,7 @@
 import type {
   Payment, FxQuote, Alert, AdminMetrics, Invoice, User, Role,
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
-  PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary,
+  PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -74,12 +74,15 @@ export const api = {
   // payments
   payments: () => req<Payment[]>('/payments'),
   payment: (id: string) => req<Payment>(`/payments/${id}`),
-  createPayment: (body: { payeeId: string; srcCurrency: string; dstCurrency: string; srcAmountMinor: number; purposeCode: string; invoiceRef?: string }) =>
+  createPayment: (body: { payeeId: string; srcCurrency: string; dstCurrency: string; srcAmountMinor: number; purposeCode: string; invoiceRef?: string; escrowMode?: EscrowMode }) =>
     req<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } }>('/payments', { method: 'POST', body: JSON.stringify(body) }),
   confirmPayment: (id: string, quoteId: string) =>
     req<Payment>(`/payments/${id}/confirm`, { method: 'POST', body: JSON.stringify({ quoteId }) }),
   retryPayout: (id: string, quoteId: string) =>
     req<Payment>(`/payments/${id}/retry`, { method: 'POST', body: JSON.stringify({ quoteId }) }),
+  // Release a held escrow once the work is approved (FR-2.2), or refund it.
+  releasePayment: (id: string) => req<Payment>(`/payments/${id}/release`, { method: 'POST' }),
+  refundPayment: (id: string) => req<Payment>(`/payments/${id}/refund`, { method: 'POST' }),
 
   // payout methods (add bank account)
   payoutAccounts: () => req<PayoutAccount[]>('/payout-accounts'),

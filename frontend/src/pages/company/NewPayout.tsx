@@ -1,7 +1,7 @@
 // The payout wizard (UI_SPEC §3.2) — the demo centerpiece. Live quote, compliance
 // verdict + agent reasoning, then confirm -> settle, all against the real backend.
 import { useEffect, useState } from 'react';
-import type { FreelancerSummary, FxQuote, Payment } from '@gigbridge/shared';
+import type { EscrowMode, FreelancerSummary, FxQuote, Payment } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
 
@@ -11,6 +11,7 @@ export default function NewPayout() {
   const [payees, setPayees] = useState<FreelancerSummary[]>([]);
   const [payeeId, setPayeeId] = useState('');
   const [amount, setAmount] = useState('500');
+  const [escrowMode, setEscrowMode] = useState<EscrowMode>('INSTANT');
   const [quote, setQuote] = useState<FxQuote | null>(null);
   const [result, setResult] = useState<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } } | null>(null);
   const [confirmed, setConfirmed] = useState<Payment | null>(null);
@@ -38,7 +39,7 @@ export default function NewPayout() {
   const runCompliance = async () => {
     setErr(''); setBusy(true); setResult(null); setConfirmed(null);
     try {
-      const r = await api.createPayment({ payeeId, srcCurrency: 'EUR', dstCurrency: 'INR', srcAmountMinor: amountMinor, purposeCode: 'P0802' });
+      const r = await api.createPayment({ payeeId, srcCurrency: 'EUR', dstCurrency: 'INR', srcAmountMinor: amountMinor, purposeCode: 'P0802', escrowMode });
       setResult(r); setQuote(r.quote);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -82,6 +83,16 @@ export default function NewPayout() {
             <input value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={getQuote} inputMode="decimal" />
           </div>
           <button className="btn ghost" onClick={getQuote}>Quote</button>
+        </div>
+
+        <div className="row" style={{ marginTop: 12 }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <label>Escrow</label>
+            <select value={escrowMode} onChange={(e) => setEscrowMode(e.target.value as EscrowMode)}>
+              <option value="INSTANT">Pay now — settle straight through</option>
+              <option value="HOLD">Fund escrow now — release when work is approved</option>
+            </select>
+          </div>
         </div>
 
         {quote && (

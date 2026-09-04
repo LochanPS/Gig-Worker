@@ -25,6 +25,12 @@ export type PaymentState = (typeof PAYMENT_STATES)[number];
 export const DISPUTE_STATUSES = ['OPEN', 'RESOLVED_REFUND', 'RESOLVED_DISMISS'] as const;
 export type DisputeStatus = (typeof DISPUTE_STATUSES)[number];
 
+// How the escrow behaves once funded (FR-2.2). INSTANT settles straight through
+// (the demo's one-click payout); HOLD funds the escrow at gig start and waits for
+// the company to approve the work before releasing to the payee.
+export const ESCROW_MODES = ['INSTANT', 'HOLD'] as const;
+export type EscrowMode = (typeof ESCROW_MODES)[number];
+
 export const VERDICTS = ['APPROVE', 'FLAG', 'REJECT'] as const;
 export type Verdict = (typeof VERDICTS)[number];
 

@@ -102,11 +102,29 @@ async function transition(
 // 1. Create a payment: persist DRAFT, run compliance, land in RATE_LOCKED-ready
 //    (COMPLIANCE_CHECK) or FLAGGED/REJECTED. Returns the payment + a fresh quote.
 export async function createPayment(companyId: string, input: CreatePaymentInput) {
-  const payee = await prisma.user.findUniqueOrThrow({ where: { id: input.payeeId } });
+  const payee = await prisma.user.findUniqueOrThrow({
+    where: { id: input.payeeId },
+    include: { freelancer: true },
+  });
+  // Validate the payee BEFORE writing anything. Creating a payment (and a
+  // compliance decision) against a company account or an unverified freelancer
+  // left rows that could never settle: the EscrowVault verified-party gate
+  // rejects an unverified payee, so the money had nowhere to go.
+  if (payee.role !== 'FREELANCER') {
+    throw Object.assign(new Error('Payee must be a freelancer account'), { statusCode: 400 });
+  }
+  if (payee.freelancer?.kycStatus !== 'VERIFIED') {
+    throw Object.assign(
+      new Error(`Payee is not verified (KYC ${payee.freelancer?.kycStatus ?? 'PENDING'}) — they must complete verification first`),
+      { statusCode: 409 },
+    );
+  }
+
   const payment = await prisma.payment.create({
     data: {
       companyId,
       freelancerId: input.payeeId,
+      escrowMode: input.escrowMode ?? 'INSTANT',
       srcCurrency: input.srcCurrency,
       dstCurrency: input.dstCurrency,
       srcAmountMinor: input.srcAmountMinor,
@@ -208,14 +226,27 @@ export async function confirmPayment(paymentId: string, actor: Actor, quoteId: s
   await prisma.payment.update({ where: { id: paymentId }, data: { escrowId: funded.escrowId } });
   await transition(paymentId, 'FUNDED', { actor: actorId, timelineKey: 'FUNDED', txHash: funded.txHash });
 
+  // FR-2.2: a HOLD escrow stops here — funded at gig start, released only when
+  // the company approves the work (POST /payments/:id/release). INSTANT (the
+  // default, and the demo's one-click payout) settles straight through.
+  if (p.escrowMode === 'HOLD') {
+    return getPaymentInternal(paymentId);
+  }
+
+  await settleFundedPayment(paymentId, funded.escrowId, 'platform');
+  return getPaymentInternal(paymentId);
+}
+
+// SETTLING -> COMPLETED -> credited. Shared by the straight-through confirm, the
+// payout retry, and the explicit release-on-approval path so all three produce
+// exactly the same timeline.
+async function settleFundedPayment(paymentId: string, escrowId: string, actor: string) {
   await transition(paymentId, 'SETTLING', { actor: 'settlement', timelineKey: 'SETTLING' });
-  const released = await getSettlement().release(funded.escrowId);
-  await transition(paymentId, 'COMPLETED', { actor: 'platform', timelineKey: 'RELEASED', txHash: released.txHash });
+  const released = await getSettlement().release(escrowId);
+  await transition(paymentId, 'COMPLETED', { actor, timelineKey: 'RELEASED', txHash: released.txHash });
   // 'CREDITED' is the off-ramp confirmation on the same COMPLETED state.
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
   await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
-
-  return getPaymentInternal(paymentId);
 }
 
 // Retry a payout that failed for lack of a destination account. Re-checks the
@@ -238,11 +269,8 @@ export async function retryPayout(paymentId: string, actor: Actor, quoteId: stri
   const funded = await getSettlement().fund(paymentId, p.freelancer.walletAddress ?? '0xpayee', p.srcAmountMinor, quote.feeMinor, complianceHash);
   await prisma.payment.update({ where: { id: paymentId }, data: { escrowId: funded.escrowId, dstAmountMinor: quote.payeeReceivesMinor, feeAmountMinor: quote.feeMinor } });
   await transition(paymentId, 'FUNDED', { actor: actorId, timelineKey: 'FUNDED', txHash: funded.txHash });
-  await transition(paymentId, 'SETTLING', { actor: 'settlement', timelineKey: 'SETTLING' });
-  const released = await getSettlement().release(funded.escrowId);
-  await transition(paymentId, 'COMPLETED', { actor: 'platform', timelineKey: 'RELEASED', txHash: released.txHash });
-  await appendStep(paymentId, 'CREDITED', 'off-ramp');
-  await markInvoicePaidByPayment(paymentId);
+  if (p.escrowMode === 'HOLD') return getPaymentInternal(paymentId);
+  await settleFundedPayment(paymentId, funded.escrowId, 'platform');
   return getPaymentInternal(paymentId);
 }
 
@@ -253,10 +281,16 @@ export async function releasePayment(paymentId: string, actor: Actor) {
   if (p.state !== 'FUNDED' && p.state !== 'SETTLING') {
     throw Object.assign(new Error(`Cannot release from ${p.state}`), { statusCode: 409 });
   }
-  if (p.state === 'FUNDED') await transition(paymentId, 'SETTLING', { actor: actorId, timelineKey: 'SETTLING' });
-  const released = await getSettlement().release(p.escrowId ?? '0x');
-  await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
-  await markInvoicePaidByPayment(paymentId);
+  if (p.state === 'SETTLING') {
+    // Already settling — just finish it.
+    const released = await getSettlement().release(p.escrowId ?? '0x');
+    await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
+    await appendStep(paymentId, 'CREDITED', 'off-ramp');
+    await markInvoicePaidByPayment(paymentId);
+  } else {
+    // Work approved on a held escrow — same tail as a straight-through payment.
+    await settleFundedPayment(paymentId, p.escrowId ?? '0x', actorId);
+  }
   return getPaymentInternal(paymentId);
 }
 
@@ -381,6 +415,7 @@ function serialize(p: any) {
     invoiceRef: p.invoiceRef,
     state: p.state,
     escrowId: p.escrowId,
+    escrowMode: p.escrowMode,
     complianceDecisionId: p.complianceDecisionId,
     txHashFund: p.txHashFund,
     txHashRelease: p.txHashRelease,

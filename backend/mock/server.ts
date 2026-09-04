@@ -63,7 +63,7 @@ app.post(`${P}/payments`, async (req, reply) => {
     freelancerId: b.payeeId, srcCurrency: b.srcCurrency, dstCurrency: b.dstCurrency,
     srcAmountMinor: b.srcAmountMinor, dstAmountMinor: null, feeAmountMinor: null, fxRateId: null,
     purposeCode: b.purposeCode, invoiceRef: b.invoiceRef ?? null, state: 'COMPLIANCE_CHECK',
-    escrowId: null, complianceDecisionId: 'cd-1', txHashFund: null, txHashRelease: null,
+    escrowId: null, escrowMode: b.escrowMode ?? 'INSTANT', complianceDecisionId: 'cd-1', txHashFund: null, txHashRelease: null,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     timeline: payments[0].timeline.slice(0, 2),
   };

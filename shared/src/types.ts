@@ -10,6 +10,7 @@ import type {
   AlertSeverity,
   Currency,
   PurposeCode,
+  EscrowMode,
   PayRunStatus,
   Cadence,
   DisputeStatus,
@@ -77,6 +78,7 @@ export interface Payment {
   invoiceRef: string | null;
   state: PaymentState;
   escrowId: string | null; // keccak256(uuid), the on-chain id
+  escrowMode: EscrowMode; // INSTANT settles through; HOLD waits for work approval
   complianceDecisionId: string | null;
   txHashFund: string | null;
   txHashRelease: string | null;

@@ -56,7 +56,7 @@ export const payments: Payment[] = [
     companyId: users.novatek.id, freelancerId: users.priya.id,
     srcCurrency: 'EUR', dstCurrency: 'INR', srcAmountMinor: 50000, dstAmountMinor: 4512000,
     feeAmountMinor: 375, fxRateId: 'fx-1', purposeCode: 'P0802', invoiceRef: 'INV-1001',
-    state: 'COMPLETED', escrowId: '0xescrow01', complianceDecisionId: 'cd-1',
+    state: 'COMPLETED', escrowId: '0xescrow01', escrowMode: 'INSTANT', complianceDecisionId: 'cd-1',
     txHashFund: '0xabc123def4567890000000000000000000000000000000000000000000000001',
     txHashRelease: '0xdef456abc7890123000000000000000000000000000000000000000000000002',
     createdAt: '2026-09-01T10:00:00Z', updatedAt: '2026-09-01T10:00:47Z', timeline: fullTimeline(),
