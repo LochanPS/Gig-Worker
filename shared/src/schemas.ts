@@ -152,6 +152,22 @@ export const createCustomerSchema = z
   });
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 
+// Change a party's settlement wallet after creation. Same rules as creation
+// (see createCustomerSchema): a key derives its own address, a contradicting pair
+// is refused, and an address alone is receive-only. Separate from the creation
+// schema because this is the one field an operator needs to change on a party
+// that already exists — swapping a generated demo wallet for a funded account
+// they control, without wiping and re-seeding the database.
+export const updateWalletSchema = z
+  .object({
+    walletAddress: z.string().regex(EVM_ADDRESS_REGEX, 'Wallet address must be 0x + 40 hex characters').optional(),
+    walletKey: z.string().regex(EVM_PRIVATE_KEY_REGEX, 'Private key must be 0x + 64 hex characters').optional(),
+  })
+  .refine((v) => v.walletAddress || v.walletKey, {
+    message: 'Supply a wallet address, a private key, or a matching pair',
+  });
+export type UpdateWalletInput = z.infer<typeof updateWalletSchema>;
+
 export const resolveQueueSchema = z.object({
   action: z.enum(['APPROVE', 'REJECT']),
   note: z.string().min(1),

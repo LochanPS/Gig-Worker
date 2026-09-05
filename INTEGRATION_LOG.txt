@@ -433,3 +433,24 @@ FRONTEND: new lib/system.tsx (SystemProvider/useSystemInfo, keyed to the signed-
   - chain.ts now delegates to the shared table.
 
 Tests: +27 (wallet resolver, destination masking, system info) — 160 backend green.
+
+2026-09-05 (cont.) — CHANGING A WALLET AFTER CREATION
+Creation was the only path that ever set a settlement wallet, so pointing an
+existing party at a funded account meant re-seeding the database.
+SHARED: schemas.ts += updateWalletSchema (walletAddress and/or walletKey, at
+  least one required) + UpdateWalletInput. Same invariant as creation.
+BACKEND: POST /customers/:id/wallet -> updateCustomerWallet(), routed through
+  resolveWallet so an update can never reintroduce an address that disagrees
+  with its key. Authorisation is the pure, tested canUpdateWallet(): an admin
+  manages anyone, anyone may set their own, a company may set its payees'
+  (it already does at creation). The change is audited with both sides.
+  real-settlement.ts: the payer/payee resolution is extracted as the pure
+  settlementParties() and tested. It pins the asymmetry that is otherwise only
+  discoverable against a live chain — the PAYER needs a key (an address-only
+  account is refused with an actionable message), the PAYEE needs only an
+  address, and the orchestrator's address is cross-checked against the payee's
+  own account so the two can never disagree about where money goes.
+FRONTEND: an inline wallet editor per row on Customers, rendering under the
+  party it edits. When the target is a COMPANY and no key is supplied it warns
+  that the payer cannot sign, since that case otherwise fails only at settlement.
+Tests: +14 (wallet authz, settlement parties) — 174 backend green.

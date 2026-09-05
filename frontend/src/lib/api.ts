@@ -4,7 +4,7 @@ import type {
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
   CustomerSummary, CreateCustomerInput, Notification, Credential, PaymentDocument,
-  AdjudicationSummary, Treasury, SystemInfo,
+  AdjudicationSummary, Treasury, SystemInfo, UpdateWalletInput,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -74,6 +74,10 @@ export const api = {
   customer: (id: string) => req<CustomerSummary>(`/customers/${id}`),
   createCustomer: (body: CreateCustomerInput) => req<CustomerSummary>('/customers', { method: 'POST', body: JSON.stringify(body) }),
   verifyCustomer: (id: string) => req<{ id: string }>(`/admin/verify/${id}`, { method: 'POST', body: JSON.stringify({}) }),
+  // Repoint an existing party at a different settlement wallet — swapping a
+  // generated demo wallet for a funded account, without re-seeding.
+  updateCustomerWallet: (id: string, body: UpdateWalletInput) =>
+    req<CustomerSummary>(`/customers/${id}/wallet`, { method: 'POST', body: JSON.stringify(body) }),
 
   // batch pay-run (FR-2.5)
   payRuns: () => req<PayRun[]>('/payruns'),

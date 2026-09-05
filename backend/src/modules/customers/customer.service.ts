@@ -3,7 +3,7 @@
 // seed. Admins see and create everyone; a company sees the freelancers it can pay.
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
-import type { CreateCustomerInput, CustomerSummary, Currency, Role } from '@gigbridge/shared';
+import type { CreateCustomerInput, CustomerSummary, Currency, Role, UpdateWalletInput } from '@gigbridge/shared';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
@@ -127,6 +127,50 @@ export async function createCustomer(actor: { id: string; role: Role }, input: C
     payoutMethod: input.payoutMethod ?? null,
   });
   return getCustomer(user.id);
+}
+
+// Who may repoint whose wallet. Pure — a wallet decides where money lands, so the
+// rule is testable on its own rather than buried in a service call. Mirrors
+// createCustomer: an admin manages anyone; anyone may set their own; a company may
+// set its payees' (it already does exactly that at creation).
+export function canUpdateWallet(
+  actor: { id: string; role: Role },
+  target: { id: string; role: Role },
+): boolean {
+  if (actor.role === 'ADMIN') return true;
+  if (actor.id === target.id) return true;
+  return actor.role === 'COMPANY' && target.role === 'FREELANCER';
+}
+
+// Point a party at a different settlement wallet — typically swapping the demo
+// wallet the platform generated for a funded account the operator controls.
+// Without this the only ways to change a wallet were re-seeding the database or
+// editing it by hand, because creation was the sole path that ever set one.
+//
+// The resolver enforces the same invariant as creation, so an update can never
+// reintroduce an address that disagrees with its key.
+export async function updateCustomerWallet(
+  actor: { id: string; role: Role },
+  userId: string,
+  input: UpdateWalletInput,
+) {
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+  if (!canUpdateWallet(actor, { id: userId, role: target.role as Role })) {
+    throw Object.assign(new Error('Not allowed to change this wallet'), { statusCode: 403 });
+  }
+
+  const w = resolveWallet(input);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { walletAddress: w.address, walletKey: w.key, walletSource: w.source },
+  });
+  // Wallets decide where money lands, so a change is recorded with both sides.
+  await audit(actor.id, 'CUSTOMER_WALLET_UPDATED', `user:${userId}`,
+    { walletAddress: target.walletAddress, canSign: !!target.walletKey },
+    { walletAddress: w.address, canSign: !!w.key, source: w.source },
+  );
+  return getCustomer(userId);
 }
 
 // Create the payee's off-ramp destination alongside the account. Mirrors

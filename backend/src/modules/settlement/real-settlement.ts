@@ -52,6 +52,48 @@ function onChainAddress(u: { walletAddress: string | null; walletKey: string | n
   throw new Error("real-settlement: party has no settlement wallet");
 }
 
+export interface SettlementParty {
+  walletAddress: string | null;
+  walletKey: string | null;
+}
+
+/**
+ * Resolve the two accounts a funding transaction needs. Pure, so the asymmetry
+ * between them is pinned by tests rather than only discovered against a chain:
+ *
+ *   payer — must be able to SIGN, so it needs a key. An account supplied as an
+ *           address alone is receive-only, and is refused HERE with an
+ *           actionable message instead of deep inside an RPC call.
+ *   payee — only has to RECEIVE, so an address with no key is entirely valid.
+ *           That is the point of letting an operator paste in a wallet they
+ *           control without surrendering its key.
+ *
+ * The address the orchestrator passes is cross-checked against the payee's own
+ * account, so the two can never silently disagree about where money is going.
+ */
+export function settlementParties(
+  company: SettlementParty,
+  freelancer: SettlementParty,
+  passedPayeeWallet?: string,
+): { payerKey: string; payee: Address } {
+  if (!company.walletKey) {
+    throw new Error(
+      "real-settlement: the payer has no settlement key, so it cannot sign a funding transaction. " +
+        "Its wallet was supplied as an address only, which can receive value but not spend it — " +
+        "add the account's private key to pay from it.",
+    );
+  }
+  const payee = onChainAddress(freelancer);
+  // '0xpayee' is the historical placeholder from when settlement ignored this
+  // argument entirely; it means "no opinion", not a real address.
+  if (passedPayeeWallet && passedPayeeWallet !== "0xpayee" && passedPayeeWallet.toLowerCase() !== payee.toLowerCase()) {
+    throw new Error(
+      `real-settlement: payee wallet mismatch — orchestrator passed ${passedPayeeWallet} but the payee's account is ${payee}`,
+    );
+  }
+  return { payerKey: company.walletKey, payee };
+}
+
 /** Build the port adapter over the chain ops. */
 export function createRealSettlement(ops: ChainOps): Settlement {
   return {
@@ -60,22 +102,7 @@ export function createRealSettlement(ops: ChainOps): Settlement {
         where: { id: paymentId },
         include: { company: true, freelancer: true },
       });
-      const payerKey = payment.company.walletKey;
-      if (!payerKey) {
-        // The payer must be able to SIGN. A company created with an address but no
-        // key is receive-only, and says so rather than failing deep in the RPC call.
-        throw new Error(
-          `real-settlement: payer ${payment.companyId} has no settlement key, so it cannot sign a funding transaction. Add the account's private key to pay from it.`,
-        );
-      }
-      // The payee only has to RECEIVE, so an address with no key is fine here — that
-      // is the whole point of letting an operator paste in a wallet they control.
-      const payee = onChainAddress(payment.freelancer);
-      if (payeeWallet && payeeWallet !== "0xpayee" && payeeWallet.toLowerCase() !== payee.toLowerCase()) {
-        throw new Error(
-          `real-settlement: payee wallet mismatch — orchestrator passed ${payeeWallet} but the payee's account is ${payee}`,
-        );
-      }
+      const { payerKey, payee } = settlementParties(payment.company, payment.freelancer, payeeWallet);
 
       const escrowId = ops.escrowIdFor(paymentId);
       const amount = ops.minorToUsdc(amountMinor);

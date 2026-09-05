@@ -49,6 +49,13 @@ export default function Customers() {
   const [accountNumber, setAccountNumber] = useState('');
   const [bankIdentifier, setBankIdentifier] = useState('');
 
+  // Inline wallet editor for a party that already exists — the funded-account
+  // swap, which creation alone could not do.
+  const [editId, setEditId] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editKey, setEditKey] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
+
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -98,6 +105,29 @@ export default function Customers() {
       await load();
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
+  };
+
+  const startEdit = (c: CustomerSummary) => {
+    setEditId(c.id); setEditAddress(c.walletAddress ?? ''); setEditKey(''); setErr(''); setMsg('');
+  };
+
+  const saveWallet = async () => {
+    setErr(''); setMsg(''); setEditBusy(true);
+    try {
+      const c = await api.updateCustomerWallet(editId, {
+        walletAddress: editAddress.trim() || undefined,
+        walletKey: editKey.trim() || undefined,
+      });
+      setMsg(
+        `${c.name} now settles to ${c.walletAddress}.` +
+          (c.role === 'COMPANY' && !c.canSign
+            ? ' It has no private key, so it can RECEIVE but cannot fund a payment — add the key to pay from this account.'
+            : ''),
+      );
+      setEditId(''); setEditAddress(''); setEditKey('');
+      await load();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setEditBusy(false); }
   };
 
   const verify = async (id: string) => {
@@ -261,7 +291,45 @@ export default function Customers() {
               <td>{c.role === 'FREELANCER' ? <DestinationTag destination={c.payoutDestination} /> : <span className="muted" style={{ fontSize: 12 }}>—</span>}</td>
               <td style={{ textAlign: 'center' }}>{c.paymentsCount ?? 0}</td>
               <td style={{ textAlign: 'center' }}><Chip value={c.status} /></td>
-              <td>{!c.verified && isAdmin && c.role !== 'ADMIN' && <button className="btn ghost" onClick={() => verify(c.id)}>Verify</button>}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>
+                {!c.verified && isAdmin && c.role !== 'ADMIN' && <button className="btn ghost" onClick={() => verify(c.id)}>Verify</button>}
+                {c.role !== 'ADMIN' && (
+                  <button className="btn ghost" style={{ marginLeft: 6 }} onClick={() => (editId === c.id ? setEditId('') : startEdit(c))}>
+                    {editId === c.id ? 'Cancel' : 'Wallet'}
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+          {/* The editor renders as a row under the party it edits, so it is never
+              ambiguous whose wallet is being changed. */}
+          {list.filter((c) => c.id === editId).map((c) => (
+            <tr key={c.id + '-edit'}>
+              <td colSpan={8} style={{ background: 'var(--panel-2)' }}>
+                <b style={{ fontSize: 13 }}>Settlement wallet — {c.name}</b>
+                <div className="row" style={{ marginTop: 10, alignItems: 'flex-end' }}>
+                  <div style={{ flex: 3, minWidth: 300 }}>
+                    <label>Wallet address</label>
+                    <input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="0x…" spellCheck={false} autoCapitalize="none" />
+                  </div>
+                  <div style={{ flex: 3, minWidth: 260 }}>
+                    <label>Private key {c.role === 'COMPANY' ? '(required to pay from this account)' : '(optional)'}</label>
+                    <input type="password" value={editKey} onChange={(e) => setEditKey(e.target.value)} placeholder="0x… — leave blank to keep it receive-only" spellCheck={false} autoCapitalize="none" />
+                  </div>
+                  <button className="btn" onClick={saveWallet} disabled={editBusy || (!editAddress.trim() && !editKey.trim())}>
+                    {editBusy ? 'Saving…' : 'Save wallet'}
+                  </button>
+                </div>
+                {/* A payer with no key is the one case that fails only at settlement
+                    time, so it is called out here rather than deep in an RPC error. */}
+                {c.role === 'COMPANY' && !editKey.trim() && (
+                  <p className="muted" style={{ fontSize: 12, marginBottom: 0, marginTop: 8 }}>
+                    This is the <b>payer</b>. An address without its private key can receive value but cannot
+                    sign a funding transaction, so on-chain payouts from it will be refused. Supply the key
+                    (via this field or <span className="mono">DEMO_WALLET_KEYS</span>) to pay from it for real.
+                  </p>
+                )}
+              </td>
             </tr>
           ))}
           {list.length === 0 && <tr><td colSpan={8} className="muted">No customers yet — add one above.</td></tr>}
