@@ -72,6 +72,27 @@ export const RULES: Rule[] = [
       };
     },
   },
+  {
+    id: 'IN-PACB-001',
+    jurisdiction: 'INDIA',
+    legalRef: 'RBI PA-CB per-transaction cap (cross-border payout / INR off-ramp)',
+    severity: 'FLAG',
+    evaluate: (ctx) => {
+      // The UPI leg / INR off-ramp settles through a Payment Aggregator – Cross Border
+      // (PA-CB). Each cross-border payout to India carries a per-transaction ceiling;
+      // above it the payment must route via an AD-bank / manual review rather than the
+      // standard PA-CB rail. Deterministic FLAG — the adjudicator triages it.
+      const inbound = ctx.payee.country === 'IN';
+      const usdMinor = ctx.toMinor('USD');
+      const over = inbound && usdMinor > THRESHOLDS.IN_PACB_001_PER_TXN_CAP_USD;
+      return {
+        passed: !over,
+        message: over
+          ? `Payout of USD ${(usdMinor / 100).toFixed(0)} exceeds the PA-CB per-transaction cap of USD ${THRESHOLDS.IN_PACB_001_PER_TXN_CAP_USD / 100} — route via AD-bank / manual review.`
+          : 'Within the PA-CB per-transaction cap for the INR off-ramp.',
+      };
+    },
+  },
   // ---- EU (AMLD / GDPR) ----
   {
     id: 'EU-AML-001',

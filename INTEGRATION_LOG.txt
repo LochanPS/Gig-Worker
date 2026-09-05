@@ -360,3 +360,9 @@ BACKEND: payment.service.ts creditPayee() resolves the payee's active dst-curren
   payoutMethod + payoutRailRef; called on both COMPLETED paths (straight-through
   settle + release-on-approval). serialize() exposes the two fields.
   payout-rail.interface.ts += pure destinationFromAccount(). Tests added.
+
+2026-09-05 (cont.) — UPI LEG phase 5: PA-CB per-transaction limit rule
+SHARED: constants.ts THRESHOLDS += IN_PACB_001_PER_TXN_CAP_USD (USD 10,000).
+BACKEND: compliance rule IN-PACB-001 (India, FLAG) — an inbound INR-off-ramp
+  payout above the PA-CB per-transaction cap flags for adjudication. The engine
+  is now 11 rules (was 10); rules.test.ts updated + a rule test added.

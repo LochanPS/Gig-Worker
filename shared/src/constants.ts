@@ -5,6 +5,7 @@ export const THRESHOLDS = {
   IN_RBI_002_PAN_REQUIRED_INR: 50_000_00, // INR 50,000 in paise
   EU_AML_001_EDD_EUR: 10_000_00, // EUR 10,000 in cents
   IN_LRS_001_ANNUAL_CAP_USD: 250_000_00, // USD 250,000 in cents
+  IN_PACB_001_PER_TXN_CAP_USD: 10_000_00, // USD 10,000 per-transaction PA-CB cap (INR off-ramp)
   GB_VEL_001_MAX_PAYMENTS_24H: 5,
   GB_STR_001_COUNT_72H: 3,
   GB_STR_001_WITHIN_PCT_OF_THRESHOLD: 0.1, // within 10% below EU AML threshold

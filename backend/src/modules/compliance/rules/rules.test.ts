@@ -56,7 +56,18 @@ describe('compliance rules', () => {
     expect(run('EU-GDPR-001', ctx()).passed).toBe(true);
   });
 
-  it('has exactly 10 rules', () => {
-    expect(RULES).toHaveLength(10);
+  it('IN-PACB-001 flags an inbound payout above the PA-CB per-transaction cap', () => {
+    // USD 12,000 inbound to India — over the USD 10,000 cap.
+    expect(run('IN-PACB-001', ctx({ toMinor: () => 12_000_00 })).passed).toBe(false);
+    // USD 5,000 inbound — within the cap.
+    expect(run('IN-PACB-001', ctx({ toMinor: () => 5_000_00 })).passed).toBe(true);
+    // Not inbound to India — the cap does not apply.
+    expect(
+      run('IN-PACB-001', ctx({ payee: party({ country: 'US', name: 'US Co' }), toMinor: () => 99_000_00 })).passed,
+    ).toBe(true);
+  });
+
+  it('has exactly 11 rules', () => {
+    expect(RULES).toHaveLength(11);
   });
 });
