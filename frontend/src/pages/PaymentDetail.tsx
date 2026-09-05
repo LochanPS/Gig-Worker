@@ -7,12 +7,14 @@ import { api, getToken } from '../lib/api.js';
 import { useAuth } from '../lib/auth.js';
 import { useWs } from '../lib/ws.js';
 import { money, Chip } from '../components/bits.js';
+import { SettlementBadge, TxHash, WalletAddress } from '../components/chainbits.js';
 import Timeline from '../components/Timeline.js';
-import { chainMeta } from '../lib/chain.js';
+import { useSystemInfo } from '../lib/system.js';
 
 export default function PaymentDetail({ backTo }: { backTo: string }) {
   const { id = '' } = useParams();
   const { user } = useAuth();
+  const system = useSystemInfo();
   const [p, setP] = useState<Payment | null>(null);
   const [docs, setDocs] = useState<PaymentDocument[]>([]);
   const [reason, setReason] = useState('');
@@ -83,7 +85,10 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
       <Link className="back" to={backTo}>← Back</Link>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page" style={{ margin: 0 }}>Payment</h1>
-        <Chip value={p.state} />
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+          <SettlementBadge compact />
+          <Chip value={p.state} />
+        </div>
       </div>
       <p className="sub mono">{p.id}</p>
 
@@ -104,8 +109,24 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Purpose</span><span className="v">{p.purposeCode ?? '—'}</span>
             <span className="k">Escrow</span><span className="v mono">{p.escrowId ? p.escrowId.slice(0, 16) + '…' : '—'}</span>
             <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
-            {p.payoutMethod && (<><span className="k">Paid out</span><span className="v">{p.payoutMethod === 'UPI' ? `UPI · ${credited?.vpaMasked ?? ''}` : 'Bank transfer'}</span></>)}
-            <span className="k">Network</span><span className="v">{chainMeta().name}</span>
+            {p.payoutMethod && (<><span className="k">Paid out</span><span className="v">{p.payoutMethod === 'UPI' ? `UPI · ${credited?.vpaMasked ?? ''}` : `Bank transfer${credited?.accountMasked ? ` · ${credited.accountMasked}` : ''}`}{credited?.railRef ? ` · ${credited.railRef}` : ''}</span></>)}
+            {/* The settlement wallets: which accounts this payment actually moved
+                value between. The page named the network but never the parties. */}
+            <span className="k">Payer wallet</span><span className="v"><WalletAddress address={p.companyWallet} /></span>
+            <span className="k">Payee wallet</span><span className="v"><WalletAddress address={p.freelancerWallet} /></span>
+            {/* The two on-chain transactions were only reachable by hovering the
+                timeline; they belong on the summary, labelled real or simulated. */}
+            <span className="k">Fund tx</span><span className="v"><TxHash hash={p.txHashFund} short /></span>
+            <span className="k">Release tx</span><span className="v"><TxHash hash={p.txHashRelease} short /></span>
+            <span className="k">Network</span>
+            <span className="v">
+              {system ? system.chainName : '—'}
+              {system && system.settlementMode === 'simulated' && (
+                <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                  {system.degraded ? 'chain unreachable — simulated' : 'simulated'}
+                </span>
+              )}
+            </span>
           </div>
           <div className="docbtns">
             {docs.map((d) => (

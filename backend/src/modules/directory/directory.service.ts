@@ -4,6 +4,7 @@
 // and payout-destination facts the wizard needs to warn before confirming.
 import type { Currency, FreelancerSummary, KycStatus } from '@gigbridge/shared';
 import { prisma } from '../../lib/db.js';
+import { activeDestination } from '../payouts/destination.js';
 
 // Pure — decides whether a freelancer can actually receive money today.
 // Both halves matter: an unverified payee fails the EscrowVault verified-party
@@ -19,7 +20,9 @@ export async function listFreelancers(): Promise<FreelancerSummary[]> {
     orderBy: { name: 'asc' },
     include: {
       freelancer: true,
-      payoutAccounts: { where: { active: true }, select: { currency: true } },
+      // Full rows (not just currency) so the picker can name the destination the
+      // off-ramp would use, not merely that one exists.
+      payoutAccounts: { where: { active: true }, orderBy: { createdAt: 'desc' } },
     },
   });
 
@@ -34,6 +37,7 @@ export async function listFreelancers(): Promise<FreelancerSummary[]> {
       walletAddress: u.walletAddress,
       payoutCurrencies,
       payable: isPayable(kycStatus, payoutCurrencies),
+      payoutDestination: activeDestination(u.payoutAccounts),
     };
   });
 }

@@ -36,6 +36,21 @@ function maskVpa(vpa: string): string {
   return `${vpa.slice(0, 1)}${'*'.repeat(Math.max(2, at - 1))}@${vpa.slice(at + 1)}`;
 }
 
+// The on-chain address the escrow will release to. This used to fall back to the
+// literal '0xpayee' because settlement ignored the argument entirely; now that the
+// stored wallet is the account money actually moves to, a missing one is a real
+// precondition failure and says so instead of funding into a placeholder.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function payeeWallet(freelancer: any): string {
+  if (!freelancer?.walletAddress) {
+    throw Object.assign(
+      new Error('Payee has no settlement wallet — they must be verified (or given a wallet address) before they can be paid.'),
+      { statusCode: 409 },
+    );
+  }
+  return freelancer.walletAddress;
+}
+
 // Who is asking. Every public entry point takes one so the payment module scopes
 // its reads and writes the way the rest of the backend already does (invoices,
 // pay-runs, schedules, payout accounts, disputes all check ownership).
@@ -265,7 +280,7 @@ export async function confirmPayment(paymentId: string, actor: Actor, quoteId: s
   const complianceHash = keccak256(toUtf8(p.decision?.id ?? paymentId));
   const funded = await getSettlement().fund(
     paymentId,
-    p.freelancer.walletAddress ?? '0xpayee',
+    payeeWallet(p.freelancer),
     p.srcAmountMinor,
     quote.feeMinor,
     complianceHash,
@@ -352,7 +367,7 @@ export async function retryPayout(paymentId: string, actor: Actor, quoteId: stri
 
   await transition(paymentId, 'RATE_LOCKED', { actor: actorId, timelineKey: 'RATE_LOCKED', extra: { retry: true } });
   const complianceHash = keccak256(toUtf8(p.decision?.id ?? paymentId));
-  const funded = await getSettlement().fund(paymentId, p.freelancer.walletAddress ?? '0xpayee', p.srcAmountMinor, quote.feeMinor, complianceHash);
+  const funded = await getSettlement().fund(paymentId, payeeWallet(p.freelancer), p.srcAmountMinor, quote.feeMinor, complianceHash);
   await prisma.payment.update({ where: { id: paymentId }, data: { escrowId: funded.escrowId, dstAmountMinor: quote.payeeReceivesMinor, feeAmountMinor: quote.feeMinor } });
   await transition(paymentId, 'FUNDED', { actor: actorId, timelineKey: 'FUNDED', txHash: funded.txHash });
   if (p.escrowMode === 'HOLD') return getPaymentInternal(paymentId);
@@ -464,7 +479,7 @@ async function appendStep(paymentId: string, key: string, actor: string, detail?
 export async function getPayment(id: string, requester: Actor) {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id },
-    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true } }, freelancer: { select: { name: true } } },
+    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true, walletAddress: true } }, freelancer: { select: { name: true, walletAddress: true } } },
   });
   assertParty(p, requester);
   return serialize(p);
@@ -477,7 +492,7 @@ export async function getPayment(id: string, requester: Actor) {
 export async function getPaymentInternal(id: string) {
   const p = await prisma.payment.findUniqueOrThrow({
     where: { id },
-    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true } }, freelancer: { select: { name: true } } },
+    include: { timeline: { orderBy: { at: 'asc' } }, decision: true, company: { select: { name: true, walletAddress: true } }, freelancer: { select: { name: true, walletAddress: true } } },
   });
   return serialize(p);
 }
@@ -487,7 +502,7 @@ export async function listPayments(userId: string, role: string) {
   const rows = await prisma.payment.findMany({
     where,
     orderBy: { createdAt: 'desc' },
-    include: { timeline: { orderBy: { at: 'asc' } }, company: { select: { name: true } }, freelancer: { select: { name: true } } },
+    include: { timeline: { orderBy: { at: 'asc' } }, company: { select: { name: true, walletAddress: true } }, freelancer: { select: { name: true, walletAddress: true } } },
   });
   return rows.map(serialize);
 }
@@ -498,8 +513,12 @@ function serialize(p: any) {
     id: p.id,
     companyId: p.companyId,
     companyName: p.company?.name ?? null,
+    // The settlement wallets this payment moved value between. Both parties see
+    // both names already; the addresses are public chain data by construction.
+    companyWallet: p.company?.walletAddress ?? null,
     freelancerId: p.freelancerId,
     freelancerName: p.freelancer?.name ?? null,
+    freelancerWallet: p.freelancer?.walletAddress ?? null,
     srcCurrency: p.srcCurrency,
     dstCurrency: p.dstCurrency,
     srcAmountMinor: p.srcAmountMinor,

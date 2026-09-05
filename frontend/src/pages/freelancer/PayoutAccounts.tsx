@@ -55,6 +55,14 @@ export default function PayoutAccounts() {
       <h1 className="page">Payout methods</h1>
       <p className="sub">Where your payouts land. You need an active account in the payout currency to receive money.</p>
 
+      {/* The account at the top of this list is the one the off-ramp will use, which
+          was never stated — with several accounts it was guesswork which one paid. */}
+      {active.length > 0 && (
+        <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>
+          Your next payout goes to <b>{active[0].method === 'UPI' ? active[0].vpa : active[0].accountNumberMasked}</b> ({active[0].currency}) — the most recently added active account for that currency.
+        </p>
+      )}
+
       {active.length === 0 && (
         <div className="card" style={{ borderLeft: '3px solid var(--reject)', marginBottom: 16 }}>
           <b>No active payout account.</b> <span className="muted">Any payout to you will fail until you add one below.</span>

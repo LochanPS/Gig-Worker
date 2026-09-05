@@ -366,3 +366,70 @@ SHARED: constants.ts THRESHOLDS += IN_PACB_001_PER_TXN_CAP_USD (USD 10,000).
 BACKEND: compliance rule IN-PACB-001 (India, FLAG) — an inbound INR-off-ramp
   payout above the PA-CB per-transaction cap flags for adjudication. The engine
   is now 11 rules (was 10); rules.test.ts updated + a rule test added.
+
+2026-09-05 (cont.) — REAL WALLETS AT CUSTOMER CREATION + LAST MILE IN THE UI
+Fixes four gaps where a capability existed in code but not in the interface, and
+one where the interface showed something that was not true.
+
+SHARED: new chains.ts — CHAINS + chainMetaFor(), the single chain/explorer table
+  both sides read (the frontend had its own copy, free to drift from the backend's
+  answer). types.ts += SystemInfo (settlementMode, degraded, chainId, chainName,
+  explorerUrl, contracts); CustomerSummary += canSign, walletSource,
+  payoutDestination; FreelancerSummary += payoutDestination; Payment +=
+  companyWallet, freelancerWallet. schemas.ts createCustomerSchema += walletAddress
+  / walletKey (EVM_ADDRESS_REGEX, EVM_PRIVATE_KEY_REGEX) and a payout destination
+  (payoutMethod / payoutCurrency / payoutLabel / vpa / bank fields), with a
+  superRefine per method. VPA_REGEX hoisted above its first use. All additive.
+
+BACKEND: new lib/wallet.ts — resolveWallet() is now the ONLY way a party's wallet
+  is minted. It derives the address from a supplied key, refuses a contradicting
+  address/key pair, treats an address alone as receive-only (no invented key), and
+  generates a matched pair otherwise. This closes the invariant break where
+  walletAddress and walletKey were two independent randoms, which is why real
+  settlement had to ignore the stored address as "display-only".
+  - customer.service.ts: honours the supplied wallet, creates the payout
+    destination at creation time (a company/admin path distinct from the payee's
+    own self-service POST /payout-accounts), and reports canSign / walletSource /
+    payoutDestination. verification.service.ts + seed.ts route through the same
+    resolver. Migration 20260905090000_wallet_source adds User.walletSource
+    (provenance is stored, not guessed — a supplied and a generated wallet can
+    both carry a key).
+  - real-settlement.ts: walletAddress is now the on-chain identity (key-derived
+    only as a fallback for pre-invariant rows); ensureChainReady registers every
+    party with a wallet, not only those with a key, so a supplied receive-only
+    address passes EscrowVault's verified-party gate; gas top-ups skip accounts
+    that cannot sign. A payer with no key now fails with a clear message instead
+    of deep in the RPC call. payment.service.ts drops the '0xpayee' placeholder
+    it used to fund into.
+  - new modules/system: GET /system/info reports what settlement is REALLY doing.
+    enableRealSettlement records real / simulated / degraded (real was requested
+    and the chain was unreachable) — previously that fallback was silent and the
+    UI presented random-bytes hashes exactly like chain transactions.
+  - new payouts/destination.ts: one canonical maskVpa + destination describer,
+    replacing what was becoming a third copy of the masking rule (document.service
+    re-exports it, so its tests are unchanged).
+  - seed.ts: Indian payees now seed a UPI VPA rather than a bank account. The
+    whole UPI last mile shipped in phases 1-8 and never once appeared in the demo,
+    because every seeded payee was a BANK destination and so upiIntent was null.
+
+FRONTEND: new lib/system.tsx (SystemProvider/useSystemInfo, keyed to the signed-in
+  user since /system/info needs a session) and components/chainbits.tsx
+  (SettlementBadge, TxHash, WalletAddress, DestinationTag). Rule: a tx hash is only
+  ever a link when the backend says settlement is real; simulated hashes render as
+  plain text marked "simulated".
+  - Customers: settlement-wallet section (own wallet vs generated) + payout
+    destination section; table gains wallet and destination columns.
+  - NewPayout: the inline "+ New payee" form takes a wallet and a UPI/bank
+    destination, so a payee added mid-wizard is payable end to end instead of
+    failing PAYOUT_FAILED on the first payment; payee cards and the quote card
+    name the destination BEFORE the company commits.
+  - PaymentDetail: payer/payee wallets and both tx hashes on the summary, labelled
+    real or simulated.
+  - PayRun: the payee list was three hardcoded seed UUIDs — it is the live roster
+    now (it broke entirely against an unseeded database), plus a previous-runs
+    table reading GET /payruns, which had no reader at all.
+  - Monitor: settlement/chain panel (mode, chain, deployed contract addresses) and
+    a control for POST /admin/expire-locks, which had no UI.
+  - chain.ts now delegates to the shared table.
+
+Tests: +27 (wallet resolver, destination masking, system info) — 160 backend green.

@@ -102,6 +102,9 @@ model User {
   name          String
   walletAddress String?
   walletKey     String? // DEMO ONLY — custodial demo wallet private key
+  // PROVIDED (an operator supplied this account) | GENERATED (the platform
+  // minted a throwaway one). walletAddress is always the address of walletKey.
+  walletSource  String?
   createdAt     DateTime @default(now())
 
   company       CompanyProfile?

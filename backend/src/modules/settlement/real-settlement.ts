@@ -14,6 +14,7 @@ import { ensureDeployed } from "@gigbridge/contracts";
 import { createChainOps, type ChainOps } from "@gigbridge/contracts/chain";
 import { prisma } from "../../lib/db.js";
 import { setSettlement, type FundResult, type Settlement } from "./settlement.interface.js";
+import { recordSettlement } from "../system/system.service.js";
 
 type Logger = { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void };
 const noopLog: Logger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -28,33 +29,53 @@ function credHash(userId: string): Hex {
   return keccak256(toBytes(userId));
 }
 
-/**
- * The demo seed stores walletKey and walletAddress as independent randoms, so
- * the on-chain identity must be derived from the KEY (the actual signer). All
- * chain ops use this; the stored walletAddress is display-only.
- */
 function hexKey(k: string): Hex {
   return (k.startsWith("0x") ? k : `0x${k}`) as Hex;
 }
-function addressOfKey(walletKey: string): Address {
-  return privateKeyToAccount(hexKey(walletKey)).address;
+
+/**
+ * The on-chain identity of a party.
+ *
+ * walletAddress is now the truth: every wallet is written through lib/wallet.ts,
+ * which guarantees the stored address IS the address of the stored key, and an
+ * operator can supply a real testnet account when creating a customer. So the
+ * address the UI shows is the address the money moves to.
+ *
+ * The key-derived address remains the fallback for rows written before that
+ * invariant existed (the old seed minted address and key as independent randoms).
+ * Deriving from the key is the safe side of that disagreement: the key is what can
+ * actually sign, so a legacy payer stays able to fund.
+ */
+function onChainAddress(u: { walletAddress: string | null; walletKey: string | null }): Address {
+  if (u.walletAddress) return u.walletAddress as Address;
+  if (u.walletKey) return privateKeyToAccount(hexKey(u.walletKey)).address;
+  throw new Error("real-settlement: party has no settlement wallet");
 }
 
 /** Build the port adapter over the chain ops. */
 export function createRealSettlement(ops: ChainOps): Settlement {
   return {
-    async fund(paymentId, _payeeWallet, amountMinor, feeMinor, complianceHash): Promise<FundResult> {
+    async fund(paymentId, payeeWallet, amountMinor, feeMinor, complianceHash): Promise<FundResult> {
       const payment = await prisma.payment.findUniqueOrThrow({
         where: { id: paymentId },
         include: { company: true, freelancer: true },
       });
       const payerKey = payment.company.walletKey;
-      const payeeKey = payment.freelancer.walletKey;
-      if (!payerKey) throw new Error(`real-settlement: payer ${payment.companyId} has no demo wallet key`);
-      if (!payeeKey) throw new Error(`real-settlement: payee ${payment.freelancerId} has no demo wallet key`);
-      // on-chain payee is the key-derived address (see addressOfKey note), not the
-      // display walletAddress the orchestrator passes.
-      const payee = addressOfKey(payeeKey);
+      if (!payerKey) {
+        // The payer must be able to SIGN. A company created with an address but no
+        // key is receive-only, and says so rather than failing deep in the RPC call.
+        throw new Error(
+          `real-settlement: payer ${payment.companyId} has no settlement key, so it cannot sign a funding transaction. Add the account's private key to pay from it.`,
+        );
+      }
+      // The payee only has to RECEIVE, so an address with no key is fine here — that
+      // is the whole point of letting an operator paste in a wallet they control.
+      const payee = onChainAddress(payment.freelancer);
+      if (payeeWallet && payeeWallet !== "0xpayee" && payeeWallet.toLowerCase() !== payee.toLowerCase()) {
+        throw new Error(
+          `real-settlement: payee wallet mismatch — orchestrator passed ${payeeWallet} but the payee's account is ${payee}`,
+        );
+      }
 
       const escrowId = ops.escrowIdFor(paymentId);
       const amount = ops.minorToUsdc(amountMinor);
@@ -87,8 +108,12 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
   const addresses = await ensureDeployed();
   const ops = createChainOps({ addresses });
 
+  // Every party with a settlement wallet, not only those the platform holds a key
+  // for: a payee whose address an operator supplied has no key, and it still has to
+  // be registered in the IdentityRegistry or EscrowVault.fund() rejects the payment
+  // at its verified-party gate.
   const users = await prisma.user.findMany({
-    where: { walletKey: { not: null } },
+    where: { walletAddress: { not: null } },
     include: { company: true, freelancer: true },
   });
 
@@ -106,10 +131,12 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
 
   for (const u of users) {
     const verified = u.company?.kybStatus === "VERIFIED" || u.freelancer?.kycStatus === "VERIFIED";
-    if (!verified || !u.walletKey) continue;
-    const wallet = addressOfKey(u.walletKey);
+    if (!verified || !u.walletAddress) continue;
+    const wallet = onChainAddress(u);
 
-    if (isLocal && (await ops.ethBalance(wallet)) < GAS_FLOOR) {
+    // Gas is only useful to an account that can sign; a receive-only payee never
+    // sends a transaction, so topping it up would just burn the faucet.
+    if (isLocal && u.walletKey && (await ops.ethBalance(wallet)) < GAS_FLOOR) {
       await ops.sendGas(wallet, GAS_TOPUP);
     }
     if (!(await ops.isVerified(wallet))) {
@@ -130,10 +157,21 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
  * default and backend behaviour is unchanged.
  */
 export async function enableRealSettlement(log: Logger = noopLog): Promise<boolean> {
-  if ((process.env.SETTLEMENT_MODE ?? "simulated").toLowerCase() !== "real") return false;
+  if ((process.env.SETTLEMENT_MODE ?? "simulated").toLowerCase() !== "real") {
+    recordSettlement({ active: "simulated", degraded: false, contracts: null });
+    return false;
+  }
   try {
     const ops = await ensureChainReady(log);
     setSettlement(createRealSettlement(ops));
+    // Publish what is actually in force, so the UI can label tx hashes as real
+    // rather than leaving every hash ambiguous.
+    const { MockUSDC, IdentityRegistry, EscrowVault, AuditAnchor } = ops.addresses;
+    recordSettlement({
+      active: "real",
+      degraded: false,
+      contracts: { MockUSDC, IdentityRegistry, EscrowVault, AuditAnchor },
+    });
     // Live on-chain feed (PRD FR-5.3): log every settlement event as anvil mines it.
     ops.watchEscrow((e) => {
       const id = typeof e.args.id === "string" ? e.args.id : "";
@@ -142,6 +180,11 @@ export async function enableRealSettlement(log: Logger = noopLog): Promise<boole
     log.info("real-settlement: ENABLED (on-chain settlement active + event listener)");
     return true;
   } catch (err) {
+    // Real settlement was requested and could not be delivered. Recording this as
+    // DEGRADED (rather than a plain "simulated") is the difference between the UI
+    // saying "this demo simulates settlement" and an operator believing their
+    // payments went on-chain when they did not.
+    recordSettlement({ active: "simulated", degraded: true, contracts: null });
     log.warn(`real-settlement: chain unavailable, staying on simulated settlement (${(err as Error).message})`);
     return false;
   }

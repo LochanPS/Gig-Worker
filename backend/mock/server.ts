@@ -60,7 +60,8 @@ app.post(`${P}/payments`, async (req, reply) => {
   const b = req.body as any;
   const p: Payment = {
     id: randomUUID(), companyId: byToken(req.headers.authorization)?.id ?? users.novatek.id,
-    companyName: 'Novatek GmbH', freelancerId: b.payeeId, freelancerName: 'Priya Sharma',
+    companyName: 'Novatek GmbH', companyWallet: users.novatek.walletAddress,
+    freelancerId: b.payeeId, freelancerName: 'Priya Sharma', freelancerWallet: users.priya.walletAddress,
     srcCurrency: b.srcCurrency, dstCurrency: b.dstCurrency,
     srcAmountMinor: b.srcAmountMinor, dstAmountMinor: null, feeAmountMinor: null, fxRateId: null,
     purposeCode: b.purposeCode, invoiceRef: b.invoiceRef ?? null, state: 'COMPLIANCE_CHECK',

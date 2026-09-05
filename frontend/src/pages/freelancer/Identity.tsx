@@ -8,6 +8,7 @@ import type { Credential, VerificationResult } from '@gigbridge/shared';
 import { api, getToken } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.js';
 import { Chip } from '../../components/bits.js';
+import { SettlementBadge, TxHash, WalletAddress } from '../../components/chainbits.js';
 
 // Mirrors the backend's credentialStatus(): revoked wins, then expiry.
 function statusOf(c: Credential): 'ACTIVE' | 'EXPIRED' | 'REVOKED' {
@@ -42,7 +43,10 @@ export default function Identity() {
 
   return (
     <>
-      <h1 className="page">Identity</h1>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page" style={{ margin: 0 }}>Identity</h1>
+        <SettlementBadge />
+      </div>
       <p className="sub">Verified once, reused on every payment — no re-checks per payout.</p>
 
       <div className="grid" style={{ gridTemplateColumns: '1.15fr 1fr', gap: 18, alignItems: 'start' }}>
@@ -60,7 +64,9 @@ export default function Identity() {
                 <span className="k">Issued</span><span className="v">{day(cred.issuedAt)}</span>
                 <span className="k">Expires</span><span className="v">{day(cred.expiresAt)}</span>
                 <span className="k">On-chain anchor</span>
-                <span className="v mono" style={{ wordBreak: 'break-all' }}>{cred.anchorTxHash ?? '—'}</span>
+                {/* Linked to the explorer when it is a real anchoring transaction,
+                    and marked simulated when it is not. */}
+                <span className="v"><TxHash hash={cred.anchorTxHash} /></span>
               </div>
               <p className="muted" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 14 }}>
                 Only the hash is mirrored on-chain via the IdentityRegistry — no personal data
@@ -90,7 +96,7 @@ export default function Identity() {
             <span className="k">KYC status</span>
             <span className="v">{status ? <Chip value={status.status} /> : '—'}</span>
             <span className="k">Settlement wallet</span>
-            <span className="v mono" style={{ wordBreak: 'break-all' }}>{user?.walletAddress ?? '—'}</span>
+            <span className="v"><WalletAddress address={user?.walletAddress} short={false} /></span>
           </div>
           <p className="muted" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 14 }}>
             Where the money lands is set separately —{' '}

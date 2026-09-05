@@ -1,28 +1,22 @@
 // Active chain + block-explorer links for on-chain references (roadmap #7).
-// The chain the app points at is set at BUILD time via VITE_CHAIN_ID:
-//   31337 (default) = local anvil — no public explorer, tx hashes render as plain text.
-//   11155111 = Ethereum Sepolia · 84532 = Base Sepolia · 80002 = Polygon Amoy.
-// Set VITE_CHAIN_ID to the chain you deployed the contracts to, then explorer links
-// light up wherever a tx hash or address is shown.
-export interface ChainMeta {
-  id: number;
-  name: string;
-  explorerUrl: string | null; // null = no public explorer (local)
-  nativeSymbol: string;
-}
+//
+// The chain TABLE now lives in @gigbridge/shared, so the backend's /system/info
+// and these links can never disagree about which explorer a chain uses.
+//
+// Which chain is active has two answers, and they differ in an important way:
+//   - VITE_CHAIN_ID is a BUILD-time guess baked into the bundle.
+//   - GET /system/info is what the backend is really settling on, right now.
+// Prefer the live answer wherever it is available (see useSystemInfo); this
+// build-time default is the fallback before that request lands.
+import { chainMetaFor, type ChainMeta } from '@gigbridge/shared';
 
-const CHAINS: Record<number, ChainMeta> = {
-  31337: { id: 31337, name: 'Local Anvil', explorerUrl: null, nativeSymbol: 'ETH' },
-  11155111: { id: 11155111, name: 'Ethereum Sepolia', explorerUrl: 'https://sepolia.etherscan.io', nativeSymbol: 'ETH' },
-  84532: { id: 84532, name: 'Base Sepolia', explorerUrl: 'https://sepolia.basescan.org', nativeSymbol: 'ETH' },
-  80002: { id: 80002, name: 'Polygon Amoy', explorerUrl: 'https://amoy.polygonscan.com', nativeSymbol: 'POL' },
-};
+export type { ChainMeta };
 
 const rawEnv = import.meta.env as Record<string, string | undefined>;
 export const activeChainId: number = Number(rawEnv.VITE_CHAIN_ID ?? 31337);
 
 export function chainMeta(id: number = activeChainId): ChainMeta {
-  return CHAINS[id] ?? { id, name: `Chain ${id}`, explorerUrl: null, nativeSymbol: 'ETH' };
+  return chainMetaFor(id);
 }
 
 export function explorerTx(hash: string, id: number = activeChainId): string | null {
@@ -33,4 +27,9 @@ export function explorerTx(hash: string, id: number = activeChainId): string | n
 export function explorerAddress(addr: string, id: number = activeChainId): string | null {
   const m = chainMeta(id);
   return m.explorerUrl ? `${m.explorerUrl}/address/${addr}` : null;
+}
+
+/** Short form for a 0x address or hash: 0x1234…cdef. */
+export function shortHex(v: string, lead = 6, tail = 4): string {
+  return v.length <= lead + tail + 1 ? v : `${v.slice(0, lead)}…${v.slice(-tail)}`;
 }

@@ -3,6 +3,8 @@ import type { Alert, Dispute, AdminMetrics, CustomerSummary, AdjudicationSummary
 import { api } from '../../lib/api.js';
 import { useWs } from '../../lib/ws.js';
 import { money, Chip, Stat } from '../../components/bits.js';
+import { SettlementBadge } from '../../components/chainbits.js';
+import { useSystemInfo } from '../../lib/system.js';
 
 interface QueueItem { paymentId: string; company: string; freelancer: string; verdict: string; agentExplanation: string; srcCurrency: string; srcAmountMinor: number; }
 
@@ -13,6 +15,9 @@ export default function Monitor() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [adj, setAdj] = useState<AdjudicationSummary | null>(null);
+  const [sweep, setSweep] = useState('');
+  const [sweeping, setSweeping] = useState(false);
+  const system = useSystemInfo();
   const load = () => {
     api.queue().then((q) => setQueue(q as unknown as QueueItem[])).catch(() => {});
     api.alerts().then(setAlerts).catch(() => {});
@@ -32,13 +37,76 @@ export default function Monitor() {
   const resolve = async (id: string, action: 'APPROVE' | 'REJECT') => { await api.resolveFlag(id, action, `${action} by operator`).catch(() => {}); load(); };
   const resolveDispute = async (id: string, action: 'REFUND' | 'DISMISS') => { await api.resolveDispute(id, action, `${action} by operator`).catch(() => {}); load(); };
 
+  // Sweep rate locks past their window. This already ran on a backend timer and
+  // was exposed as an endpoint, with nothing in the UI able to call it — so the
+  // EXPIRED state could only be reached by waiting out the clock.
+  const expireLocks = async () => {
+    setSweeping(true); setSweep('');
+    try {
+      const r = await api.expireLocks();
+      setSweep(r.expired === 0 ? 'No rate locks were past their window.' : `Expired ${r.expired} stale rate lock(s).`);
+      load();
+    } catch (e) { setSweep((e as Error).message); }
+    finally { setSweeping(false); }
+  };
+
   const openDisputes = disputes.filter((d) => d.status === 'OPEN');
   const verified = customers.filter((c) => c.verified).length;
 
   return (
     <>
-      <h1 className="page">Operator monitor</h1>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page" style={{ margin: 0 }}>Operator monitor</h1>
+        <SettlementBadge />
+      </div>
       <p className="sub">The AI adjudicator clears the routine flow — you handle only what it escalates.</p>
+
+      {/* Settlement + chain. An operator could not previously tell whether the
+          platform was writing real transactions or simulating them — and the
+          backend falls back to simulated on any chain error, silently. */}
+      <div className="card" style={{ marginBottom: 16, borderLeft: `3px solid ${system?.degraded ? 'var(--reject)' : system?.settlementMode === 'real' ? 'var(--approve)' : 'var(--line-strong)'}` }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 260 }}>
+            <div className="label">Settlement</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>
+              {!system ? 'Checking…'
+                : system.degraded
+                  ? <>Real settlement is configured, but the chain was <b>unreachable at boot</b> — payments are being simulated and transaction hashes are not real.</>
+                  : system.settlementMode === 'real'
+                    ? <>Writing <b>real transactions</b> on {system.chainName}. Every hash links to the explorer.</>
+                    : <>Simulated: the full payment lifecycle runs, but no transaction reaches a chain.</>}
+            </div>
+            {system?.explorerUrl && (
+              <a className="muted mono" style={{ fontSize: 12 }} href={system.explorerUrl} target="_blank" rel="noreferrer">{system.explorerUrl} ↗</a>
+            )}
+          </div>
+          <div style={{ minWidth: 200 }}>
+            <div className="label">Chain</div>
+            <div className="mono" style={{ fontSize: 13, marginTop: 4 }}>{system ? `${system.chainName} · ${system.chainId}` : '—'}</div>
+            {system?.contracts && (
+              <div style={{ marginTop: 8 }}>
+                {Object.entries(system.contracts).map(([name, addr]) => (
+                  <div key={name} className="mono" style={{ fontSize: 11, opacity: 0.75 }}>
+                    {name}{' '}
+                    {system.explorerUrl
+                      ? <a href={`${system.explorerUrl}/address/${addr}`} target="_blank" rel="noreferrer">{addr.slice(0, 10)}…{addr.slice(-4)}</a>
+                      : `${addr.slice(0, 10)}…${addr.slice(-4)}`}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ minWidth: 190 }}>
+            <div className="label">Maintenance</div>
+            <button className="btn ghost" style={{ marginTop: 6 }} onClick={expireLocks} disabled={sweeping}>
+              {sweeping ? 'Sweeping…' : 'Expire stale rate locks'}
+            </button>
+            <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+              {sweep || 'Runs the sweep that moves un-funded, lapsed quotes to EXPIRED.'}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Platform metrics */}
       <div className="grid stats" style={{ marginBottom: 16 }}>

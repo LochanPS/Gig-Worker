@@ -53,7 +53,8 @@ function fullTimeline(): TimelineStep[] {
 export const payments: Payment[] = [
   {
     id: 'aaaaaaa1-0000-0000-0000-000000000001',
-    companyId: users.novatek.id, companyName: users.novatek.name, freelancerId: users.priya.id, freelancerName: users.priya.name,
+    companyId: users.novatek.id, companyName: users.novatek.name, companyWallet: users.novatek.walletAddress,
+    freelancerId: users.priya.id, freelancerName: users.priya.name, freelancerWallet: users.priya.walletAddress,
     srcCurrency: 'EUR', dstCurrency: 'INR', srcAmountMinor: 50000, dstAmountMinor: 4512000,
     feeAmountMinor: 375, fxRateId: 'fx-1', purposeCode: 'P0802', invoiceRef: 'INV-1001',
     state: 'COMPLETED', escrowId: '0xescrow01', escrowMode: 'INSTANT', complianceDecisionId: 'cd-1',

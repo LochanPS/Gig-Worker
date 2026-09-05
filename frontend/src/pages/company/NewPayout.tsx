@@ -3,10 +3,15 @@
 // confirm against a ticking rate lock. Everything here is the real backend.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { Currency, EscrowMode, FreelancerSummary, FxQuote, Payment, PurposeCode } from '@gigbridge/shared';
+import type { Currency, EscrowMode, FreelancerSummary, FxQuote, Payment, PayoutMethod, PurposeCode } from '@gigbridge/shared';
 import { PURPOSE_CODES } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
+import { SettlementBadge, TxHash, WalletAddress, DestinationTag } from '../../components/chainbits.js';
+
+// Mirror the shared regexes so the inline form validates before the request.
+const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+const VPA_RE = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/;
 
 // FEMA purpose codes the engine accepts, with what each actually means — the
 // company has to pick one and "P0802" alone tells them nothing.
@@ -73,10 +78,20 @@ export default function NewPayout() {
   const [busy, setBusy] = useState(false);
 
   // Inline "add payee" so a company never has to leave the wizard to pay someone new.
+  // It captures the two things that decide whether the payment can actually land:
+  // the wallet the escrow releases to, and the UPI id / bank account it off-ramps
+  // into. Created without them, a payee got a throwaway wallet and no destination,
+  // so the very first payout to them failed.
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newCountry, setNewCountry] = useState('IN');
+  const [newWallet, setNewWallet] = useState('');
+  const [newMethod, setNewMethod] = useState<PayoutMethod | ''>('UPI');
+  const [newVpa, setNewVpa] = useState('');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountNumber, setNewAccountNumber] = useState('');
+  const [newBankId, setNewBankId] = useState('');
 
   const loadPayees = (select?: string) =>
     api.freelancers()
@@ -112,14 +127,31 @@ export default function NewPayout() {
       .catch((e) => { if (mine === quoteReq.current) setErr((e as Error).message); });
   }, [step, amountMinor, srcCurrency, dstCurrency]);
 
+  const newWalletValid = !newWallet || ADDR_RE.test(newWallet.trim());
+  const newVpaValid = newMethod !== 'UPI' || VPA_RE.test(newVpa.trim());
+  const newBankValid = newMethod !== 'BANK' || !!(newAccountName && newAccountNumber.length >= 4 && newBankId);
+  const canAddPayee = !!newName && !!newEmail && newWalletValid && newVpaValid && newBankValid;
+
   const addPayee = async () => {
     setErr(''); setBusy(true);
     try {
       const c = await api.createCustomer({
         role: 'FREELANCER', name: newName, email: newEmail, country: newCountry.toUpperCase(), verified: true,
+        walletAddress: newWallet.trim() || undefined,
+        ...(newMethod
+          ? {
+              payoutMethod: newMethod,
+              payoutCurrency: dstCurrency,
+              ...(newMethod === 'UPI'
+                ? { vpa: newVpa.trim() }
+                : { accountName: newAccountName, accountNumber: newAccountNumber, bankIdentifier: newBankId }),
+            }
+          : {}),
       });
       await loadPayees(c.id);
-      setAdding(false); setNewName(''); setNewEmail('');
+      setAdding(false);
+      setNewName(''); setNewEmail(''); setNewWallet('');
+      setNewVpa(''); setNewAccountName(''); setNewAccountNumber(''); setNewBankId('');
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -147,7 +179,10 @@ export default function NewPayout() {
 
   return (
     <>
-      <h1 className="page">New payout</h1>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page" style={{ margin: 0 }}>New payout</h1>
+        <SettlementBadge />
+      </div>
       <p className="sub">Pick a payee and amount, watch compliance run, then settle.</p>
 
       <ol className="stepper">
@@ -180,11 +215,45 @@ export default function NewPayout() {
                 <div style={{ flex: 2, minWidth: 180 }}><label>Email</label><input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></div>
                 <div style={{ flex: 1, minWidth: 90 }}><label>Country</label><input value={newCountry} maxLength={2} onChange={(e) => setNewCountry(e.target.value)} /></div>
               </div>
-              <button className="btn" style={{ marginTop: 12 }} disabled={busy || !newName || !newEmail} onClick={addPayee}>
+
+              <div className="row" style={{ marginTop: 10 }}>
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <label>Settlement wallet (optional)</label>
+                  <input value={newWallet} onChange={(e) => setNewWallet(e.target.value)} placeholder="0x… — leave blank to generate a demo wallet" spellCheck={false} autoCapitalize="none" />
+                  {!newWalletValid && <div className="err" style={{ marginTop: 6 }}>An address is 0x followed by 40 hex characters.</div>}
+                </div>
+              </div>
+
+              {/* The off-ramp destination. Set here, the payee is payable end to end
+                  on the very first payment instead of failing for want of one. */}
+              <div style={{ marginTop: 12 }}>
+                <label>Payout destination ({dstCurrency})</label>
+                <div className="row" style={{ gap: 8 }}>
+                  <button className={`btn ${newMethod === 'UPI' ? '' : 'ghost'}`} type="button" onClick={() => setNewMethod('UPI')}>UPI</button>
+                  <button className={`btn ${newMethod === 'BANK' ? '' : 'ghost'}`} type="button" onClick={() => setNewMethod('BANK')}>Bank</button>
+                  <button className={`btn ${newMethod === '' ? '' : 'ghost'}`} type="button" onClick={() => setNewMethod('')}>They will add it</button>
+                </div>
+                {newMethod === 'UPI' && (
+                  <div style={{ marginTop: 10 }}>
+                    <input value={newVpa} onChange={(e) => setNewVpa(e.target.value)} placeholder="name@okhdfcbank" spellCheck={false} autoCapitalize="none" />
+                    {newVpa && !newVpaValid && <div className="err" style={{ marginTop: 6 }}>UPI id must look like name@bank.</div>}
+                  </div>
+                )}
+                {newMethod === 'BANK' && (
+                  <div className="row" style={{ marginTop: 10 }}>
+                    <div style={{ flex: 2, minWidth: 160 }}><input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Account holder name" /></div>
+                    <div style={{ flex: 1, minWidth: 130 }}><input value={newAccountNumber} onChange={(e) => setNewAccountNumber(e.target.value)} placeholder="Account number" /></div>
+                    <div style={{ flex: 1, minWidth: 130 }}><input value={newBankId} onChange={(e) => setNewBankId(e.target.value)} placeholder="IFSC / IBAN" /></div>
+                  </div>
+                )}
+              </div>
+
+              <button className="btn" style={{ marginTop: 12 }} disabled={busy || !canAddPayee} onClick={addPayee}>
                 {busy ? 'Adding…' : 'Add and verify'}
               </button>
               <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>
-                Provisions a wallet and issues a credential, so they are payable immediately.
+                Issues a credential and sets up the wallet and off-ramp, so they are payable immediately.
+                {newMethod === '' && ' Without a payout destination, a payment to them will settle on-chain and then fail.'}
               </p>
             </div>
           )}
@@ -194,11 +263,15 @@ export default function NewPayout() {
               <button key={p.id} className={`payee${p.id === payeeId ? ' on' : ''}`} onClick={() => setPayeeId(p.id)}>
                 <div>
                   <b>{p.name}</b>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {p.country} · {p.payoutCurrencies.join(', ') || 'no payout account'}
-                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>{p.country}</div>
+                  {/* Where the money ends up, shown BEFORE committing rather than
+                      only on the receipt afterwards. */}
+                  <div style={{ marginTop: 2 }}><DestinationTag destination={p.payoutDestination} /></div>
                 </div>
-                <Chip value={p.kycStatus} />
+                <div style={{ textAlign: 'right' }}>
+                  <Chip value={p.kycStatus} />
+                  <div style={{ marginTop: 4, fontSize: 11 }}><WalletAddress address={p.walletAddress} /></div>
+                </div>
               </button>
             ))}
             {filtered.length === 0 && <div className="muted" style={{ padding: 14 }}>No payees match.</div>}
@@ -259,7 +332,11 @@ export default function NewPayout() {
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <div><div className="label">Mid rate</div><div className="mono">{quote.midRate.toFixed(4)}</div></div>
                 <div><div className="label">Our fee (0.75%)</div><div className="mono">{money(quote.feeMinor, srcCurrency)}</div></div>
-                <div><div className="label">{payee?.name ?? 'Payee'} receives</div><div className="mono"><b>{money(quote.payeeReceivesMinor, dstCurrency)}</b></div></div>
+                <div>
+                  <div className="label">{payee?.name ?? 'Payee'} receives</div>
+                  <div className="mono"><b>{money(quote.payeeReceivesMinor, dstCurrency)}</b></div>
+                  <div style={{ marginTop: 2 }}><DestinationTag destination={payee?.payoutDestination} /></div>
+                </div>
                 <div>
                   <div className="label">Same payment on PayPal</div>
                   <div className="mono" style={{ color: 'var(--reject)' }}>−{money(quote.incumbentFeeMinor, srcCurrency)}</div>
@@ -328,8 +405,12 @@ export default function NewPayout() {
           <div className="kv">
             <span className="k">Payee receives</span><span className="v"><b>{money(confirmed.dstAmountMinor, confirmed.dstCurrency)}</b></span>
             <span className="k">Fee</span><span className="v">{money(confirmed.feeAmountMinor, confirmed.srcCurrency)}</span>
-            <span className="k">Fund tx</span><span className="v mono" style={{ wordBreak: 'break-all' }}>{confirmed.txHashFund ?? '—'}</span>
-            <span className="k">Release tx</span><span className="v mono" style={{ wordBreak: 'break-all' }}>{confirmed.txHashRelease ?? '—'}</span>
+            <span className="k">Settles to</span><span className="v"><WalletAddress address={payee?.walletAddress} short={false} /></span>
+            <span className="k">Lands in</span><span className="v"><DestinationTag destination={payee?.payoutDestination} /></span>
+            {/* Linked to the explorer when these are real transactions, marked
+                simulated when they are not — never presented ambiguously. */}
+            <span className="k">Fund tx</span><span className="v"><TxHash hash={confirmed.txHashFund} /></span>
+            <span className="k">Release tx</span><span className="v"><TxHash hash={confirmed.txHashRelease} /></span>
           </div>
           <div className="row" style={{ marginTop: 14 }}>
             <Link className="btn" to={`/company/payments/${confirmed.id}`}>View timeline</Link>

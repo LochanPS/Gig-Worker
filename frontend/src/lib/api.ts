@@ -4,7 +4,7 @@ import type {
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
   CustomerSummary, CreateCustomerInput, Notification, Credential, PaymentDocument,
-  AdjudicationSummary, Treasury,
+  AdjudicationSummary, Treasury, SystemInfo,
 } from '@gigbridge/shared';
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
@@ -137,6 +137,11 @@ export const api = {
   // its controls straight from this descriptor rather than guessing.
   paymentDocuments: (id: string) => req<PaymentDocument[]>(`/payments/${id}/documents`),
 
+  // What the backend is really doing when it settles: real on-chain transactions
+  // or a simulation. Drives the settlement badge, so a fabricated tx hash is never
+  // presented as a chain transaction.
+  systemInfo: () => req<SystemInfo>('/system/info'),
+
   // admin
   queue: () => req<Array<Record<string, unknown>>>('/admin/queue'),
   resolveFlag: (id: string, action: 'APPROVE' | 'REJECT', note: string) =>
@@ -146,4 +151,7 @@ export const api = {
   adjudications: () => req<AdjudicationSummary>('/admin/adjudications'),
   treasury: () => req<Treasury>('/admin/treasury'),
   rules: () => req<Array<{ id: string; jurisdiction: string; severity: string; legalRef: string }>>('/admin/rules'),
+  // Sweep rate locks past their window now. The same sweep runs on a timer in the
+  // backend; exposing it makes the EXPIRED state demonstrable instead of a wait.
+  expireLocks: () => req<{ expired: number; paymentIds: string[] }>('/admin/expire-locks', { method: 'POST' }),
 };

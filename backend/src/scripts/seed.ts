@@ -5,10 +5,10 @@ import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { privateKeyToAccount } from 'viem/accounts';
 import { prisma } from '../lib/db.js';
+import { resolveWallet } from '../lib/wallet.js';
 import { keccak256, toUtf8 } from '../lib/hash.js';
 
 const PW = 'demo1234';
-const wallet = () => '0x' + randomBytes(20).toString('hex');
 
 // Real wallet keys for the demo actors, injected via env so real on-chain
 // settlement (SETTLEMENT_MODE=real) signs from ACTUAL funded accounts and every
@@ -23,14 +23,17 @@ try {
   REAL_KEYS = {};
 }
 
-function walletForUser(u: SeedUser): { addr: string | null; key: string | null } {
-  if (u.role === 'ADMIN') return { addr: null, key: null };
+function walletForUser(u: SeedUser): { addr: string | null; key: string | null; source: string | null } {
+  if (u.role === 'ADMIN') return { addr: null, key: null, source: null };
   const real = REAL_KEYS[u.email];
   if (real) {
     const k = (real.startsWith('0x') ? real : `0x${real}`) as `0x${string}`;
-    return { addr: privateKeyToAccount(k).address, key: k }; // address derived from the real key
+    return { addr: privateKeyToAccount(k).address, key: k, source: 'PROVIDED' }; // address derived from the real key
   }
-  return { addr: wallet(), key: '0x' + randomBytes(32).toString('hex') };
+  // Generated pair. The address is DERIVED from the key rather than being a second
+  // independent random, so the wallet shown in the UI is the account that signs.
+  const w = resolveWallet({});
+  return { addr: w.address, key: w.key, source: w.source };
 }
 
 interface SeedUser {
@@ -73,7 +76,8 @@ async function seedUser(u: SeedUser) {
       country: u.country,
       name: u.name,
       walletAddress: w.addr,
-      walletKey: w.key, // random demo key, or a real key injected via DEMO_WALLET_KEYS
+      walletKey: w.key, // generated demo key, or a real key injected via DEMO_WALLET_KEYS
+      walletSource: w.source,
       ...(u.role === 'COMPANY'
         ? { company: { create: { legalName: u.legalName!, regNumber: u.regNumber!, country: u.country, kybStatus: u.verified ? 'VERIFIED' : 'PENDING' } } }
         : u.role === 'FREELANCER'
@@ -94,15 +98,25 @@ async function seedUser(u: SeedUser) {
     });
     // Verified freelancers get an INR payout account so payouts have a destination
     // (the PAYOUT_FAILED gate). New self-serve signups add theirs via the UI.
+    //
+    // Indian payees default to UPI, because that is the last mile this corridor
+    // actually delivers on: a UPI destination is what makes the off-ramp return a
+    // scannable upi:// intent and the payment page show "Credited via UPI". Seeding
+    // every payee as a bank account meant that whole leg existed in code and never
+    // once appeared in the demo. Non-IN payees keep a bank account, which is also
+    // the honest contrast — the UPI rail is India-specific.
     if (u.role === 'FREELANCER') {
+      const upi = u.country === 'IN';
       await prisma.payoutAccount.create({
         data: {
           userId: u.id,
-          label: `${u.country === 'IN' ? 'HDFC' : 'Wise'} account`,
+          label: upi ? 'GPay (UPI)' : 'Wise account',
           currency: 'INR',
-          accountName: u.name,
-          accountNumberMasked: '••••' + Math.floor(1000 + Math.random() * 9000),
-          bankIdentifier: u.country === 'IN' ? 'HDFC0001234' : 'TRWIBEB1XXX',
+          method: upi ? 'UPI' : 'BANK',
+          accountName: upi ? null : u.name,
+          accountNumberMasked: upi ? null : '••••' + Math.floor(1000 + Math.random() * 9000),
+          bankIdentifier: upi ? null : 'TRWIBEB1XXX',
+          vpa: upi ? `${u.name.toLowerCase().split(' ')[0]}@okhdfcbank` : null,
         },
       });
     }

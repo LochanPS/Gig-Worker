@@ -22,6 +22,7 @@ import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
 import { payoutAccountRoutes } from './modules/payouts/payout-account.routes.js';
 import { disputeRoutes } from './modules/disputes/dispute.routes.js';
 import { customerRoutes } from './modules/customers/customer.routes.js';
+import { systemRoutes } from './modules/system/system.routes.js';
 
 // HTTP status -> stable error code for the {error:{code,message}} contract
 // (BUILD_CONTRACTS §4).
@@ -75,6 +76,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await api.register(payoutAccountRoutes);
       await api.register(disputeRoutes);
       await api.register(customerRoutes);
+      await api.register(systemRoutes);
     },
     { prefix: '/api/v1' },
   );

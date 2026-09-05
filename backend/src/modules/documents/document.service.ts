@@ -173,16 +173,11 @@ export function purposeDescription(code: string | null | undefined): string {
   return label ? `${code} — ${label}` : code;
 }
 
-// Mask a UPI VPA for a document: keep the first character of the handle and the
-// full PSP, star the rest (priya@okhdfcbank -> p****@okhdfcbank). Pure — tested.
-export function maskVpa(vpa: string | null | undefined): string | null {
-  if (!vpa) return null;
-  const at = vpa.indexOf('@');
-  if (at <= 0) return vpa;
-  const handle = vpa.slice(0, at);
-  const psp = vpa.slice(at + 1);
-  return `${handle.slice(0, 1)}${'*'.repeat(Math.max(2, handle.length - 1))}@${psp}`;
-}
+// VPA masking is one rule shared by the documents, the customer list and the payee
+// picker, so it lives with the payout destination it describes. Re-exported here
+// because the FIRC/receipt templates below (and their tests) read it from this module.
+import { maskVpa } from '../payouts/destination.js';
+export { maskVpa };
 
 // One human-readable line describing how the INR reached the beneficiary: the
 // off-ramp delivery method + the masked destination. Pure — tested.

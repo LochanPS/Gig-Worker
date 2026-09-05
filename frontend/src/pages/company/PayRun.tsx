@@ -1,28 +1,58 @@
 // Batch pay-run (FR-2.5) — pay N freelancers in one action. Add line items, run
 // one compliance sweep, review per-payee verdicts, then confirm the approved ones
 // together. This is the wedge: startups paying 5–50 freelancers/month.
-import { useState } from 'react';
-import type { PayRun, PurposeCode, Currency } from '@gigbridge/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import type { FreelancerSummary, PayRun, PurposeCode, Currency } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
-
-const PAYEES = [
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Priya Sharma (IN, verified)' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'Alex Carter (US, verified)' },
-  { id: '66666666-6666-6666-6666-666666666666', name: 'SanctionedCo (watchlist — will reject)' },
-];
+import { SettlementBadge, TxHash, DestinationTag } from '../../components/chainbits.js';
 
 interface Row { payeeId: string; amount: string; srcCurrency: Currency; purposeCode: PurposeCode }
-const blankRow = (): Row => ({ payeeId: PAYEES[0].id, amount: '500', srcCurrency: 'EUR', purposeCode: 'P0802' });
 
 export default function PayRunPage() {
-  const [rows, setRows] = useState<Row[]>([blankRow(), { ...blankRow(), payeeId: PAYEES[1].id, srcCurrency: 'USD', amount: '1200' }]);
+  // The payee list used to be three hardcoded seed UUIDs, so a freelancer created
+  // through the app could never appear in a batch run — and the run broke entirely
+  // against any database that had not been seeded. It is the real roster now.
+  const [payees, setPayees] = useState<FreelancerSummary[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [note, setNote] = useState('Monthly contractor run');
   const [run, setRun] = useState<PayRun | null>(null);
+  // Past runs: GET /payruns has always existed, with nothing in the UI reading it,
+  // so a completed batch vanished the moment the page was left.
+  const [history, setHistory] = useState<PayRun[]>([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const loadHistory = () => api.payRuns().then(setHistory).catch(() => {});
+
+  useEffect(() => {
+    api.freelancers()
+      .then((list) => {
+        setPayees(list);
+        // Open with one line per payable freelancer (capped), so the page is usable
+        // immediately without asking the operator to build a roster by hand.
+        const seed = list.filter((p) => p.payable).slice(0, 2);
+        setRows(
+          (seed.length ? seed : list.slice(0, 1)).map((p, i) => ({
+            payeeId: p.id,
+            amount: i === 0 ? '500' : '1200',
+            srcCurrency: i === 0 ? 'EUR' : 'USD',
+            purposeCode: 'P0802' as PurposeCode,
+          })),
+        );
+      })
+      .catch((e) => setErr((e as Error).message));
+    loadHistory();
+  }, []);
+
   const setRow = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const blankRow = (): Row => ({
+    payeeId: payees.find((p) => p.payable)?.id ?? payees[0]?.id ?? '',
+    amount: '500',
+    srcCurrency: 'EUR',
+    purposeCode: 'P0802',
+  });
   const addRow = () => setRows((rs) => [...rs, blankRow()]);
   const delRow = (i: number) => setRows((rs) => rs.filter((_, j) => j !== i));
 
@@ -42,6 +72,7 @@ export default function PayRunPage() {
         })),
       });
       setRun(payRun);
+      await loadHistory();
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -49,17 +80,27 @@ export default function PayRunPage() {
   const confirm = async () => {
     if (!run) return;
     setBusy(true); setErr('');
-    try { setRun(await api.confirmPayRun(run.id)); }
+    try { setRun(await api.confirmPayRun(run.id)); await loadHistory(); }
     catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
 
-  const nameOf = (id: string) => PAYEES.find((p) => p.id === id)?.name ?? id.slice(0, 8);
+  const byId = useMemo(() => new Map(payees.map((p) => [p.id, p])), [payees]);
+  const nameOf = (id: string) => byId.get(id)?.name ?? id.slice(0, 8);
 
   return (
     <>
-      <h1 className="page">Batch pay-run</h1>
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 className="page" style={{ margin: 0 }}>Batch pay-run</h1>
+        <SettlementBadge />
+      </div>
       <p className="sub">Pay a whole roster in one action. One compliance sweep, one confirm, N escrows.</p>
+
+      {payees.length === 0 && !err && (
+        <div className="card muted" style={{ marginBottom: 16 }}>
+          No freelancers on the roster yet — <Link to="/customers">add one</Link> and they appear here.
+        </div>
+      )}
 
       {!run && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -68,8 +109,14 @@ export default function PayRunPage() {
               <div style={{ flex: 2, minWidth: 200 }}>
                 <label>Payee</label>
                 <select value={r.payeeId} onChange={(e) => setRow(i, { payeeId: e.target.value })}>
-                  {PAYEES.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {payees.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.country}{p.payable ? '' : ' — not payable'})
+                    </option>
+                  ))}
                 </select>
+                {/* Where this line's money would land, before the run is committed. */}
+                <div style={{ marginTop: 4 }}><DestinationTag destination={byId.get(r.payeeId)?.payoutDestination} /></div>
               </div>
               <div style={{ flex: 1, minWidth: 90 }}>
                 <label>Currency</label>
@@ -121,7 +168,7 @@ export default function PayRunPage() {
                   <td>{nameOf(p.freelancerId)}</td>
                   <td style={{ textAlign: 'right' }} className="mono">{money(p.srcAmountMinor, p.srcCurrency)}</td>
                   <td style={{ textAlign: 'center' }}><Chip value={p.state} /></td>
-                  <td className="mono muted" style={{ fontSize: 11 }}>{p.txHashFund ? p.txHashFund.slice(0, 14) + '…' : '—'}</td>
+                  <td style={{ fontSize: 11 }}><TxHash hash={p.txHashFund} short /></td>
                 </tr>
               ))}
             </tbody>
@@ -136,6 +183,37 @@ export default function PayRunPage() {
             <button className="btn ghost" onClick={() => setRun(null)}>New run</button>
           </div>
         </div>
+      )}
+
+      {/* Past runs. The backend has always served these; nothing read them, so a
+          confirmed batch disappeared as soon as you navigated away. */}
+      {history.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15, margin: '24px 0 10px' }}>Previous runs</h2>
+          <table className="table" style={{ width: '100%', fontSize: 13 }}>
+            <thead><tr>
+              <th style={{ textAlign: 'left' }}>Note</th><th>Payees</th><th>Approved</th><th>Flagged</th><th>Rejected</th><th>Status</th><th style={{ textAlign: 'left' }}>Created</th><th></th>
+            </tr></thead>
+            <tbody>
+              {history.map((h) => (
+                <tr key={h.id} style={{ opacity: run?.id === h.id ? 1 : 0.92 }}>
+                  <td>{h.note || <span className="muted">untitled run</span>}</td>
+                  <td style={{ textAlign: 'center' }}>{h.itemCount}</td>
+                  <td style={{ textAlign: 'center' }}>{h.approvedCount}</td>
+                  <td style={{ textAlign: 'center' }}>{h.flaggedCount}</td>
+                  <td style={{ textAlign: 'center' }}>{h.rejectedCount}</td>
+                  <td style={{ textAlign: 'center' }}><Chip value={h.status} /></td>
+                  <td className="muted" style={{ fontSize: 12 }}>{h.createdAt.slice(0, 16).replace('T', ' ')}</td>
+                  <td>
+                    <button className="btn ghost" onClick={() => api.payRun(h.id).then(setRun).catch((e) => setErr((e as Error).message))}>
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </>
   );

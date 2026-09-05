@@ -8,16 +8,14 @@
 // DEMO NOTE: the mock KYC/KYB check auto-approves any well-formed submission. The
 // real integration point (Sumsub/Persona/Onfido) drops in behind submitKyc/Kyb
 // exactly here; nothing downstream changes.
-import { randomBytes } from 'node:crypto';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
+import { resolveWallet } from '../../lib/wallet.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import { notify } from '../notifications/notification.service.js';
 import { isSanctioned } from '../compliance/rules/sanctions.js';
 import type { VerificationResult } from '@gigbridge/shared';
-
-const wallet = () => '0x' + randomBytes(20).toString('hex');
 
 // Mock KYC/KYB adjudication. Real vendors (Sumsub/Persona/Signzy) drop in here.
 // A submission is REJECTED when the party is on the sanctions watchlist, the tax
@@ -36,10 +34,13 @@ export async function provision(userId: string, name: string): Promise<{ hash: s
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   let walletAddress = user.walletAddress;
   if (!walletAddress) {
-    walletAddress = wallet();
+    // Generated pair — the address IS the address of the key, so settlement can
+    // pay this account rather than deriving a different one behind the UI's back.
+    const w = resolveWallet({}); // DEMO ONLY: the platform custodies the key
+    walletAddress = w.address;
     await prisma.user.update({
       where: { id: userId },
-      data: { walletAddress, walletKey: '0x' + randomBytes(32).toString('hex') }, // DEMO ONLY
+      data: { walletAddress: w.address, walletKey: w.key, walletSource: w.source },
     });
   }
 

@@ -162,8 +162,10 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .stepper li.on .dot{background:var(--accent);color:var(--accent-ink)}
 .stepper li.done .dot{background:var(--approve-soft);color:var(--approve)}
 
-.payeelist{border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:330px;overflow-y:auto}
-.payee{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
+/* A payee row carries three lines now (name, destination, wallet), so the list
+   is taller and the columns align to the top rather than to a single line. */
+.payeelist{border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:440px;overflow-y:auto}
+.payee{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer;font:inherit;color:inherit;line-height:1.45}
 .payee:last-child{border-bottom:0}
 .payee:hover{background:var(--panel-2)}
 .payee.on{background:var(--accent-soft)}

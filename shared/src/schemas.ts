@@ -93,22 +93,63 @@ export const createScheduleSchema = z.object({
 });
 export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
 
+// name@psp — a UPI Virtual Payment Address. Declared here because both the
+// customer-creation and payout-account schemas below validate against it.
+export const VPA_REGEX = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/; // name@psp
+
 // --- Customer management (create + manage the parties in the platform) ---
-export const createCustomerSchema = z.object({
-  role: z.enum(['COMPANY', 'FREELANCER']),
-  name: z.string().min(1),
-  email: z.string().email(),
-  country: z.string().length(2),
-  phone: z.string().optional(),
-  password: z.string().min(6).optional(), // defaults to a generated one if omitted
-  // company
-  legalName: z.string().optional(),
-  regNumber: z.string().optional(),
-  // freelancer
-  panOrTaxId: z.string().optional(),
-  // when true, provision wallet + issue credential + mark verified immediately
-  verified: z.boolean().optional(),
-});
+// An EVM account. The address is the settlement identity money moves to; the key
+// is what signs on its behalf. Both are demo/testnet-only values — the platform
+// custodies the key so the agent can settle without a wallet popup, which is only
+// acceptable because these are throwaway test accounts (see docs/DEPLOY_TESTNET.md).
+export const EVM_ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/;
+export const EVM_PRIVATE_KEY_REGEX = /^0x[0-9a-fA-F]{64}$/;
+
+export const createCustomerSchema = z
+  .object({
+    role: z.enum(['COMPANY', 'FREELANCER']),
+    name: z.string().min(1),
+    email: z.string().email(),
+    country: z.string().length(2),
+    phone: z.string().optional(),
+    password: z.string().min(6).optional(), // defaults to a generated one if omitted
+    // company
+    legalName: z.string().optional(),
+    regNumber: z.string().optional(),
+    // freelancer
+    panOrTaxId: z.string().optional(),
+    // when true, provision wallet + issue credential + mark verified immediately
+    verified: z.boolean().optional(),
+    // --- settlement wallet (optional; generated when omitted) ---
+    // Supply an address to send real value to an account you control, and/or a
+    // private key so the platform can sign FROM it. A key alone is enough — the
+    // address is derived from it. Supplying only an address makes the party a
+    // receive-only payee: it can be paid, but cannot itself fund a payment.
+    walletAddress: z.string().regex(EVM_ADDRESS_REGEX, 'Wallet address must be 0x + 40 hex characters').optional(),
+    walletKey: z.string().regex(EVM_PRIVATE_KEY_REGEX, 'Private key must be 0x + 64 hex characters').optional(),
+    // --- payout destination (the off-ramp last mile) ---
+    // Where the freelancer's money lands after on-chain release. Without one, a
+    // payment to them settles on-chain and then dies in PAYOUT_FAILED, so the
+    // company can set it at creation instead of waiting for the payee to log in.
+    payoutMethod: z.enum(PAYOUT_METHODS).optional(),
+    payoutCurrency: z.enum(CURRENCIES).optional(), // defaults to the corridor default (INR)
+    payoutLabel: z.string().optional(),
+    vpa: z.string().regex(VPA_REGEX, 'UPI id must look like name@bank').optional(),
+    accountName: z.string().min(1).optional(),
+    accountNumber: z.string().min(4).optional(),
+    bankIdentifier: z.string().min(1).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.payoutMethod && v.role !== 'FREELANCER') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['payoutMethod'], message: 'Only a freelancer has a payout destination' });
+    }
+    if (v.payoutMethod === 'UPI' && !v.vpa) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vpa'], message: 'A UPI id is required for a UPI payout method' });
+    }
+    if (v.payoutMethod === 'BANK' && !(v.accountName && v.accountNumber && v.bankIdentifier)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['accountNumber'], message: 'A bank payout needs an account name, number and IFSC/IBAN/routing' });
+    }
+  });
 export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
 
 export const resolveQueueSchema = z.object({
@@ -120,7 +161,6 @@ export const resolveQueueSchema = z.object({
 // A payout method is either a BANK account (account number + IFSC/IBAN/routing) or
 // a UPI id (a VPA, India's instant rail). `method` is optional for back-compat — an
 // absent method is treated as BANK. Bank vs UPI fields are conditionally required.
-export const VPA_REGEX = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/; // name@psp
 export const addPayoutAccountSchema = z
   .object({
     label: z.string().min(1), // e.g. "HDFC savings" / "GPay"

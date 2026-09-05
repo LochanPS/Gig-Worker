@@ -3,13 +3,19 @@
 // seed. Admins see and create everyone; a company sees the freelancers it can pay.
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
-import type { CreateCustomerInput, CustomerSummary, Role } from '@gigbridge/shared';
+import type { CreateCustomerInput, CustomerSummary, Currency, Role } from '@gigbridge/shared';
 import { prisma } from '../../lib/db.js';
 import { audit } from '../../lib/audit.js';
 import { keccak256, toUtf8 } from '../../lib/hash.js';
+import { resolveWallet, walletSourceOf } from '../../lib/wallet.js';
+import { activeDestination } from '../payouts/destination.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 
-const wallet = () => '0x' + randomBytes(20).toString('hex');
+// Default off-ramp currency for a payout destination set at creation time. INR is
+// the corridor the UPI last mile serves; an operator can pick another.
+const DEFAULT_PAYOUT_CURRENCY: Currency = 'INR';
+
+const mask = (acct: string) => (acct.length <= 4 ? acct : '••••' + acct.slice(-4));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toSummary(u: any): CustomerSummary {
@@ -23,6 +29,10 @@ function toSummary(u: any): CustomerSummary {
     status,
     verified: status === 'VERIFIED',
     walletAddress: u.walletAddress ?? null,
+    // A party with no stored key cannot sign, so it can be paid but cannot pay.
+    canSign: !!u.walletKey,
+    walletSource: walletSourceOf(u.walletAddress ?? null, u.walletSource ?? null),
+    payoutDestination: activeDestination(u.payoutAccounts),
     createdAt: u.createdAt.toISOString(),
     paymentsCount: (u._count?.paymentsSent ?? 0) + (u._count?.paymentsReceived ?? 0),
   };
@@ -31,6 +41,8 @@ function toSummary(u: any): CustomerSummary {
 const include = {
   company: true,
   freelancer: true,
+  // Newest first, so activeDestination() picks the same account creditPayee() will.
+  payoutAccounts: { orderBy: { createdAt: 'desc' } },
   _count: { select: { paymentsSent: true, paymentsReceived: true } },
 } as const;
 
@@ -51,10 +63,16 @@ export async function getCustomer(id: string) {
   return toSummary(u);
 }
 
-// Provision wallet + issue an on-chain-anchored credential + mark verified.
-async function provision(userId: string, name: string, role: Role) {
-  const addr = wallet();
-  await prisma.user.update({ where: { id: userId }, data: { walletAddress: addr, walletKey: '0x' + randomBytes(32).toString('hex') } });
+// Provision the settlement wallet + issue an on-chain-anchored credential + mark
+// verified. The wallet is whatever the operator supplied (a real testnet account),
+// or a freshly generated pair when they supplied nothing — either way the stored
+// address is the address of the stored key, so settlement can trust it.
+async function provision(userId: string, name: string, role: Role, input: CreateCustomerInput) {
+  const w = resolveWallet(input);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { walletAddress: w.address, walletKey: w.key, walletSource: w.source },
+  });
   const hash = keccak256(toUtf8(userId));
   const anchor = await getSettlement().anchorDecision(hash);
   await prisma.credential.create({
@@ -85,7 +103,53 @@ export async function createCustomer(actor: { id: string; role: Role }, input: C
         : { freelancer: { create: { fullName: input.name, country: input.country.toUpperCase(), panOrTaxId: input.panOrTaxId ?? null } } }),
     },
   });
-  if (input.verified) await provision(user.id, input.name, input.role);
-  await audit(actor.id, 'CUSTOMER_CREATED', `user:${user.id}`, null, { role: input.role, verified: !!input.verified });
+  if (input.verified) {
+    await provision(user.id, input.name, input.role, input);
+  } else if (input.walletAddress || input.walletKey) {
+    // An unverified party can still be given its wallet up front — verification
+    // only gates the credential, not which account the money is destined for.
+    const w = resolveWallet(input);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { walletAddress: w.address, walletKey: w.key, walletSource: w.source },
+    });
+  }
+
+  // The off-ramp destination, when the operator set one. Without this a freelancer
+  // created here settles on-chain and then dies in PAYOUT_FAILED, because only the
+  // payee themself could previously add a payout account.
+  if (input.payoutMethod) await createPayoutDestination(user.id, input);
+
+  await audit(actor.id, 'CUSTOMER_CREATED', `user:${user.id}`, null, {
+    role: input.role,
+    verified: !!input.verified,
+    walletSource: input.walletAddress || input.walletKey ? 'PROVIDED' : 'GENERATED',
+    payoutMethod: input.payoutMethod ?? null,
+  });
   return getCustomer(user.id);
+}
+
+// Create the payee's off-ramp destination alongside the account. Mirrors
+// addPayoutAccount() (same masking, same fields); the difference is only who may
+// call it — POST /payout-accounts is the payee's own self-service route, and this
+// is the company/admin creating a payee that is payable from the first payment.
+async function createPayoutDestination(userId: string, input: CreateCustomerInput) {
+  const isUpi = input.payoutMethod === 'UPI';
+  const account = await prisma.payoutAccount.create({
+    data: {
+      userId,
+      label: input.payoutLabel?.trim() || (isUpi ? 'UPI' : 'Bank account'),
+      currency: input.payoutCurrency ?? DEFAULT_PAYOUT_CURRENCY,
+      method: isUpi ? 'UPI' : 'BANK',
+      accountName: isUpi ? null : input.accountName!,
+      accountNumberMasked: isUpi ? null : mask(input.accountNumber!),
+      bankIdentifier: isUpi ? null : input.bankIdentifier!,
+      vpa: isUpi ? input.vpa! : null,
+    },
+  });
+  await audit(userId, 'PAYOUT_ACCOUNT_ADDED', `payoutAccount:${account.id}`, null, {
+    currency: account.currency,
+    method: account.method,
+    viaCustomerCreation: true,
+  });
 }
