@@ -85,7 +85,7 @@ DEMO_WALLET_KEYS={"novatek@demo.gg":"0x<wallet B key>","priya@demo.gg":"0x<walle
 > instead, use `RPC_URL=https://ethereum-sepolia-rpc.publicnode.com` + `CHAIN_ID=11155111`.)
 Then (re)seed so the demo users adopt those real addresses:
 ```
-# local:   npm run seed        (from backend/)
+# local:   pnpm db:seed        (from backend/)
 # Railway: pnpm --filter @gigbridge/backend seed:once
 ```
 On boot the backend attests each wallet's credential on-chain and mints MockUSDC to the

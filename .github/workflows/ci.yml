@@ -43,3 +43,22 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+  # The Solidity suite never ran here: contracts names its script `test:sol`, which
+  # `pnpm -r test` does not match, so the 34 contract tests were effectively unverified
+  # on every push. forge-std and openzeppelin-contracts are committed under
+  # contracts/lib, so this needs only the toolchain — no submodule checkout.
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build contracts
+        run: forge build
+        working-directory: contracts
+
+      - name: Test contracts
+        run: forge test -vv
+        working-directory: contracts

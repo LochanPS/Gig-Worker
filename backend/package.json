@@ -12,7 +12,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:seed": "tsx src/scripts/seed.ts",
-    "demo:reset": "tsx src/scripts/reset.ts"
+    "demo:reset": "tsx src/scripts/reset.ts",
+    "e2e:local": "tsx src/scripts/e2e-local.ts"
   },
   "prisma": {
     "seed": "tsx src/scripts/seed.ts"
