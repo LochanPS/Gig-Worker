@@ -9,6 +9,9 @@ plainly whether the thing is **built**, **spec'd**, or **needs an external partn
 **Read order for a new device:** this file (the map of everything) → `CORRIDOR_ROADMAP.md`
 (source of truth) → `CORRIDOR_V2_IMPLEMENTED.md` (detailed as-built) →
 `SESSION_CAPTURE_2026-09-05.md` (session + UPI spec) → `EXECUTION_PLAN_UPI_LEG.md` (build plan).
+For the outside-in view — who else is in this market and what the research says — read
+`COMPARISON_LANDSCAPE.md` (competitive landscape + literature review; §7.2 lists the pitch
+claims it contradicts).
 
 **Status legend**
 - ✅ **BUILT** — present on `main`, verified (133 backend tests · 34 forge tests · frontend tsc + `vite build`).
