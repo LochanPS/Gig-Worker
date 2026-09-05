@@ -92,12 +92,24 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
     include: { company: true, freelancer: true },
   });
 
+  // Gas top-up (1 ETH/wallet) only makes sense on local anvil, where ETH is free.
+  // On a PUBLIC testnet we must never spend the platform's scarce testnet ETH one
+  // wallet at a time — the real MetaMask accounts hold their own gas. The platform
+  // key still pays for mint / attest / release (its own txs).
+  const chainId = Number(process.env.CHAIN_ID ?? 31337);
+  const isLocal = chainId === 31337;
+  if (!isLocal) {
+    log.warn(
+      "real-settlement: public chain — payer/payee wallets must already hold testnet gas (no per-wallet ETH top-up); the platform key funds only mint/attest/release.",
+    );
+  }
+
   for (const u of users) {
     const verified = u.company?.kybStatus === "VERIFIED" || u.freelancer?.kycStatus === "VERIFIED";
     if (!verified || !u.walletKey) continue;
     const wallet = addressOfKey(u.walletKey);
 
-    if ((await ops.ethBalance(wallet)) < GAS_FLOOR) {
+    if (isLocal && (await ops.ethBalance(wallet)) < GAS_FLOOR) {
       await ops.sendGas(wallet, GAS_TOPUP);
     }
     if (!(await ops.isVerified(wallet))) {
@@ -107,7 +119,7 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
       await ops.mintUsdc(wallet, FAUCET_USDC);
     }
   }
-  log.info(`real-settlement: chain ready (EscrowVault ${addresses.EscrowVault})`);
+  log.info(`real-settlement: chain ready (EscrowVault ${addresses.EscrowVault}, chain ${chainId})`);
   return ops;
 }
 

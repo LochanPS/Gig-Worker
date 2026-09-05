@@ -3,11 +3,35 @@
 // Names/amounts are chosen so the frozen thresholds trigger deterministically.
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
+import { privateKeyToAccount } from 'viem/accounts';
 import { prisma } from '../lib/db.js';
 import { keccak256, toUtf8 } from '../lib/hash.js';
 
 const PW = 'demo1234';
 const wallet = () => '0x' + randomBytes(20).toString('hex');
+
+// Real wallet keys for the demo actors, injected via env so real on-chain
+// settlement (SETTLEMENT_MODE=real) signs from ACTUAL funded accounts and every
+// fund/release is verifiable on a public explorer. DEMO_WALLET_KEYS is a JSON map
+// { "<email>": "0x<privateKey>" } — e.g. {"novatek@demo.gg":"0x..","priya@demo.gg":"0x.."}.
+// Any actor not listed keeps a random demo key (fine for simulated mode). Keys are
+// read from env ONLY — never commit them, never hard-code them here.
+let REAL_KEYS: Record<string, string> = {};
+try {
+  REAL_KEYS = JSON.parse(process.env.DEMO_WALLET_KEYS ?? '{}');
+} catch {
+  REAL_KEYS = {};
+}
+
+function walletForUser(u: SeedUser): { addr: string | null; key: string | null } {
+  if (u.role === 'ADMIN') return { addr: null, key: null };
+  const real = REAL_KEYS[u.email];
+  if (real) {
+    const k = (real.startsWith('0x') ? real : `0x${real}`) as `0x${string}`;
+    return { addr: privateKeyToAccount(k).address, key: k }; // address derived from the real key
+  }
+  return { addr: wallet(), key: '0x' + randomBytes(32).toString('hex') };
+}
 
 interface SeedUser {
   id: string;
@@ -39,7 +63,7 @@ const USERS: SeedUser[] = [
 
 async function seedUser(u: SeedUser) {
   const passwordHash = await bcrypt.hash(PW, 10);
-  const addr = u.role === 'ADMIN' ? null : wallet();
+  const w = walletForUser(u);
   await prisma.user.create({
     data: {
       id: u.id,
@@ -48,8 +72,8 @@ async function seedUser(u: SeedUser) {
       passwordHash,
       country: u.country,
       name: u.name,
-      walletAddress: addr,
-      walletKey: addr ? '0x' + randomBytes(32).toString('hex') : null, // DEMO ONLY
+      walletAddress: w.addr,
+      walletKey: w.key, // random demo key, or a real key injected via DEMO_WALLET_KEYS
       ...(u.role === 'COMPANY'
         ? { company: { create: { legalName: u.legalName!, regNumber: u.regNumber!, country: u.country, kybStatus: u.verified ? 'VERIFIED' : 'PENDING' } } }
         : u.role === 'FREELANCER'

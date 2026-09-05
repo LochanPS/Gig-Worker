@@ -60,6 +60,47 @@ git add shared/abis/addresses.84532.json && git commit -m "chore: Base Sepolia c
   `DEPLOYED_ADDRESSES` (JSON) instead of relying on the committed file. Left unset, the
   backend keeps using simulated settlement — the app still works end to end.
 
+## 4b. Real transactions from YOUR MetaMask accounts (the verifiable-on-chain demo)
+
+To make the demo's payments *actual on-chain transactions signed by your real MetaMask
+accounts* (visible on the explorer), run the backend in real-settlement mode and inject
+your keys. **Three wallets, one role each:**
+
+| Wallet | Role | Env it goes in | Needs |
+|---|---|---|---|
+| A | Platform / deployer | `PLATFORM_PRIVATE_KEY` (+ `DEPLOYER_PRIVATE_KEY` for the deploy) | Sepolia ETH — deploys, mints MockUSDC, attests credentials, signs release |
+| B | Company / payer (Novatek) | `DEMO_WALLET_KEYS` → `novatek@demo.gg` | Sepolia ETH — approves + funds escrow |
+| C | Freelancer / payee (Priya) | `DEMO_WALLET_KEYS` → `priya@demo.gg` | nothing — only receives |
+
+Backend env (Railway variables — keys live in env ONLY, never committed, never in chat):
+```
+SETTLEMENT_MODE=real
+RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+CHAIN_ID=11155111
+PLATFORM_PRIVATE_KEY=0x<wallet A key>
+DEMO_WALLET_KEYS={"novatek@demo.gg":"0x<wallet B key>","priya@demo.gg":"0x<wallet C key>"}
+```
+Then (re)seed so the demo users adopt those real addresses:
+```
+# local:   npm run seed        (from backend/)
+# Railway: pnpm --filter @gigbridge/backend seed:once
+```
+On boot the backend attests each wallet's credential on-chain and mints MockUSDC to the
+company (real Sepolia txs, platform-signed). A payment then runs, on-chain, from your
+accounts:
+- **approve + fund** signed by the payer (wallet B): MockUSDC moves B → EscrowVault.
+- **release** signed by the platform (wallet A): MockUSDC moves EscrowVault → payee (wallet
+  C), fee → treasury.
+
+**What the value token is:** the on-chain asset is **MockUSDC** — an ERC-20 that represents
+USD (6 decimals), not raw ETH. That is correct for a stablecoin remittance. On the explorer
+you will see the ERC-20 transfers + EscrowVault interactions between your real addresses,
+each linked from the payment timeline in the app.
+
+**Gas:** wallets A and B each need a little Sepolia ETH (they sign txs); C needs none. On a
+public chain the platform does **not** top wallets up (only on local anvil), so fund A and B
+from a faucet first.
+
 ## 5. Verify
 
 - Open the explorer links from step 2 — the contracts show as deployed.
