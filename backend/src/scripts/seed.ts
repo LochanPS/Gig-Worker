@@ -16,11 +16,31 @@ const PW = 'demo1234';
 // { "<email>": "0x<privateKey>" } — e.g. {"novatek@demo.gg":"0x..","priya@demo.gg":"0x.."}.
 // Any actor not listed keeps a random demo key (fine for simulated mode). Keys are
 // read from env ONLY — never commit them, never hard-code them here.
+//
+// Malformed input FAILS LOUDLY. Swallowing it silently handed back a throwaway
+// wallet while the operator believed they had injected a funded account — and
+// the mangling is easy to hit: an unquoted JSON value in a .env file is stripped
+// of its double quotes by the shell, so DEMO_WALLET_KEYS={"a":"b"} arrives as
+// {a:b}. Quote it: DEMO_WALLET_KEYS='{"a":"0x.."}'.
 let REAL_KEYS: Record<string, string> = {};
-try {
-  REAL_KEYS = JSON.parse(process.env.DEMO_WALLET_KEYS ?? '{}');
-} catch {
-  REAL_KEYS = {};
+const rawKeys = process.env.DEMO_WALLET_KEYS?.trim();
+if (rawKeys) {
+  try {
+    REAL_KEYS = JSON.parse(rawKeys);
+  } catch {
+    throw new Error(
+      'DEMO_WALLET_KEYS is not valid JSON, so no real wallet key would be injected and every actor ' +
+        'would silently get a generated demo wallet instead.\n' +
+        `  got: ${rawKeys}\n` +
+        '  expected: {"novatek@demo.gg":"0x<64 hex>"}\n' +
+        "  in a .env file the value must be single-quoted, or the shell strips the JSON's double quotes.",
+    );
+  }
+  for (const [email, key] of Object.entries(REAL_KEYS)) {
+    if (!/^(0x)?[0-9a-fA-F]{64}$/.test(key)) {
+      throw new Error(`DEMO_WALLET_KEYS: the value for ${email} is not a 64-hex private key.`);
+    }
+  }
 }
 
 function walletForUser(u: SeedUser): { addr: string | null; key: string | null; source: string | null } {
@@ -28,7 +48,9 @@ function walletForUser(u: SeedUser): { addr: string | null; key: string | null; 
   const real = REAL_KEYS[u.email];
   if (real) {
     const k = (real.startsWith('0x') ? real : `0x${real}`) as `0x${string}`;
-    return { addr: privateKeyToAccount(k).address, key: k, source: 'PROVIDED' }; // address derived from the real key
+    const addr = privateKeyToAccount(k).address; // address derived from the real key
+    console.log(`  wallet: ${u.email} -> ${addr} (injected via DEMO_WALLET_KEYS)`);
+    return { addr, key: k, source: 'PROVIDED' };
   }
   // Generated pair. The address is DERIVED from the key rather than being a second
   // independent random, so the wallet shown in the UI is the account that signs.

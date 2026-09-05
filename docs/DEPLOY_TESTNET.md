@@ -78,8 +78,21 @@ SETTLEMENT_MODE=real
 RPC_URL=https://sepolia.base.org
 CHAIN_ID=84532
 PLATFORM_PRIVATE_KEY=0x<wallet A key>
-DEMO_WALLET_KEYS={"novatek@demo.gg":"0x<wallet B key>","priya@demo.gg":"0x<wallet C key>"}
+DEMO_WALLET_KEYS='{"novatek@demo.gg":"0x<wallet B key>","priya@demo.gg":"0x<wallet C key>"}'
 ```
+> **Single-quote `DEMO_WALLET_KEYS`.** Unquoted in a `.env` file (or in a shell
+> assignment) the shell strips the JSON's double quotes, so `{"a":"b"}` arrives as
+> `{a:b}`. The seed refuses malformed input and names the problem rather than
+> silently giving every actor a generated throwaway wallet — which looks like it
+> worked right up until you check the explorer and the address is one nobody funded.
+> On a successful seed each injected wallet is printed:
+> `wallet: novatek@demo.gg -> 0x… (injected via DEMO_WALLET_KEYS)`.
+
+> The **payer needs its private key**, not just its address: funding an escrow is a
+> signed transaction. A party whose wallet was supplied as an address alone is
+> receive-only — fine for wallet C (the payee), refused for wallet B with a message
+> saying so. Set or change a wallet without re-seeding from Customers → Wallet,
+> or `POST /customers/:id/wallet`.
 > Using **Base Sepolia** (chainId **84532**, explorer https://sepolia.basescan.org). Set
 > `VITE_CHAIN_ID=84532` on the frontend so tx links point at BaseScan. (For Ethereum Sepolia
 > instead, use `RPC_URL=https://ethereum-sepolia-rpc.publicnode.com` + `CHAIN_ID=11155111`.)
