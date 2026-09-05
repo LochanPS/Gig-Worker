@@ -62,6 +62,11 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
   if (!p) return <div className="muted">Loading…</div>;
   const isParty = user?.id === p.companyId || user?.id === p.freelancerId;
   const isCompany = user?.role === 'COMPANY';
+  // The off-ramp records how the INR landed on the CREDITED timeline step: for a
+  // UPI payout it carries the scannable upi:// intent + the masked VPA.
+  const credited = p.timeline.find((t) => t.key === 'CREDITED')?.detail as
+    | { method?: string; railRef?: string; upiIntent?: string; vpaMasked?: string; accountMasked?: string }
+    | undefined;
   // Documents are auth'd, so fetch with the bearer token and hand the HTML to a
   // new window rather than linking straight at the URL.
   const openDoc = async (doc: PaymentDocument) => {
@@ -98,6 +103,7 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Purpose</span><span className="v">{p.purposeCode ?? '—'}</span>
             <span className="k">Escrow</span><span className="v mono">{p.escrowId ? p.escrowId.slice(0, 16) + '…' : '—'}</span>
             <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
+            {p.payoutMethod && (<><span className="k">Paid out</span><span className="v">{p.payoutMethod === 'UPI' ? `UPI · ${credited?.vpaMasked ?? ''}` : 'Bank transfer'}</span></>)}
           </div>
           <div className="docbtns">
             {docs.map((d) => (
@@ -115,6 +121,25 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
           </div>
         </div>
       </div>
+
+      {/* UPI off-ramp: the money has been pushed to the payee's UPI id. The upi://
+          intent is a real, scannable "pay to this VPA" payload (also the fallback
+          affordance a real PA-CB rail would keep). */}
+      {p.state === 'COMPLETED' && credited?.upiIntent && (
+        <div className="card" style={{ marginTop: 18, borderLeft: '3px solid var(--accent, #0e9488)' }}>
+          <h2 style={{ fontSize: 14, margin: '0 0 8px' }}>Credited via UPI</h2>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>
+            {money(p.dstAmountMinor, p.dstCurrency)} pushed to <b>{credited.vpaMasked ?? 'the payee UPI id'}</b>.
+            Scan or tap to open the request in any UPI app (GPay / PhonePe / Paytm).
+          </p>
+          <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+            <a className="btn" href={credited.upiIntent}>Open in UPI app</a>
+            <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(credited.upiIntent!)}>Copy UPI link</button>
+            {credited.railRef && <span className="muted mono" style={{ fontSize: 12 }}>Ref {credited.railRef}</span>}
+          </div>
+          <div className="mono" style={{ fontSize: 11, marginTop: 10, wordBreak: 'break-all', opacity: 0.7 }}>{credited.upiIntent}</div>
+        </div>
+      )}
 
       {/* Unhappy-path actions */}
       {p.state === 'PAYOUT_FAILED' && (

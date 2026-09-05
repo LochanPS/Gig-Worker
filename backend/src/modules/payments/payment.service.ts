@@ -29,6 +29,13 @@ function toUsdMinorApprox(amountMinor: number, ccy: string): number {
   return Math.round(amountMinor * (perUsd[ccy] ?? 1));
 }
 
+// Mask a UPI VPA for the "credited to <vpa>" timeline detail (p****@okhdfcbank).
+function maskVpa(vpa: string): string {
+  const at = vpa.indexOf('@');
+  if (at <= 0) return vpa;
+  return `${vpa.slice(0, 1)}${'*'.repeat(Math.max(2, at - 1))}@${vpa.slice(at + 1)}`;
+}
+
 // Who is asking. Every public entry point takes one so the payment module scopes
 // its reads and writes the way the rest of the backend already does (invoices,
 // pay-runs, schedules, payout accounts, disputes all check ownership).
@@ -284,14 +291,14 @@ export async function confirmPayment(paymentId: string, actor: Actor, quoteId: s
 // guaranteed an active destination, so a missing account here is only defensive and
 // leaves the prior generic behaviour. Simulated by default; a real PA-CB rail swaps in
 // via setPayoutRail() with no orchestrator change.
-async function creditPayee(paymentId: string): Promise<void> {
+async function creditPayee(paymentId: string): Promise<Record<string, unknown> | undefined> {
   const p = await prisma.payment.findUnique({ where: { id: paymentId } });
-  if (!p) return;
+  if (!p) return undefined;
   const acct = await prisma.payoutAccount.findFirst({
     where: { userId: p.freelancerId, currency: p.dstCurrency, active: true },
     orderBy: { createdAt: 'desc' },
   });
-  if (!acct) return;
+  if (!acct) return undefined;
   const result = await getPayoutRail().execute({
     paymentId,
     amountMinorInr: p.dstAmountMinor ?? 0,
@@ -303,6 +310,15 @@ async function creditPayee(paymentId: string): Promise<void> {
     where: { id: paymentId },
     data: { payoutMethod: acct.method ?? 'BANK', payoutRailRef: result.railRef },
   });
+  // Detail for the CREDITED timeline step: powers the "credited to <vpa>" card and,
+  // for UPI, the scannable upi:// intent / deep link on the payment detail page.
+  return {
+    method: acct.method ?? 'BANK',
+    railRef: result.railRef,
+    ...(result.upiIntent ? { upiIntent: result.upiIntent } : {}),
+    ...(acct.method === 'UPI' && acct.vpa ? { vpaMasked: maskVpa(acct.vpa) } : {}),
+    ...(acct.method !== 'UPI' && acct.accountNumberMasked ? { accountMasked: acct.accountNumberMasked } : {}),
+  };
 }
 
 // SETTLING -> COMPLETED -> credited. Shared by the straight-through confirm, the
@@ -314,8 +330,8 @@ async function settleFundedPayment(paymentId: string, escrowId: string, actor: s
   await transition(paymentId, 'COMPLETED', { actor, timelineKey: 'RELEASED', txHash: released.txHash });
   // 'CREDITED' is the off-ramp confirmation on the same COMPLETED state: the rail
   // pushes the INR to the payee's UPI id / bank and records how it landed.
-  await creditPayee(paymentId);
-  await appendStep(paymentId, 'CREDITED', 'off-ramp');
+  const credited = await creditPayee(paymentId);
+  await appendStep(paymentId, 'CREDITED', 'off-ramp', credited);
   await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
 }
 
@@ -355,8 +371,8 @@ export async function releasePayment(paymentId: string, actor: Actor) {
     // Already settling — just finish it.
     const released = await getSettlement().release(p.escrowId ?? '0x');
     await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
-    await creditPayee(paymentId);
-    await appendStep(paymentId, 'CREDITED', 'off-ramp');
+    const credited = await creditPayee(paymentId);
+    await appendStep(paymentId, 'CREDITED', 'off-ramp', credited);
     await markInvoicePaidByPayment(paymentId);
   } else {
     // Work approved on a held escrow — same tail as a straight-through payment.
@@ -437,9 +453,11 @@ export async function expireStaleRateLocks(now: Date = new Date()): Promise<stri
   return expired;
 }
 
-async function appendStep(paymentId: string, key: string, actor: string) {
+async function appendStep(paymentId: string, key: string, actor: string, detail?: Record<string, unknown>) {
   const step = TIMELINE_STEPS.find((s) => s.key === key)!;
-  await prisma.timelineStep.create({ data: { paymentId, key: step.key, label: step.label, state: step.state, actor } });
+  await prisma.timelineStep.create({
+    data: { paymentId, key: step.key, label: step.label, state: step.state, actor, detail: (detail ?? undefined) as never },
+  });
 }
 
 // Public read — enforces that the caller is a party (or an admin).
