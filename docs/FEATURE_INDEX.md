@@ -11,10 +11,14 @@ plainly whether the thing is **built**, **spec'd**, or **needs an external partn
 `SESSION_CAPTURE_2026-09-05.md` (session + UPI spec) → `EXECUTION_PLAN_UPI_LEG.md` (build plan).
 
 **Status legend**
-- ✅ **BUILT** — present on `main`, verified (109 backend tests · 34 forge tests · frontend tsc + `vite build`).
+- ✅ **BUILT** — present on `main`, verified (117 backend tests · 34 forge tests · frontend tsc + `vite build`).
 - 🧩 **SPEC'D** — designed in full in a doc, **not yet code** (buildable now, no external dependency).
-- 🏗️ **WIP (uncommitted)** — a prior session began this in a scratch worktree; not committed, not verified (see §7).
 - 🤝 **NEEDS YOU** — blocked on an external partner, license, key, or asset; code seam may already exist.
+
+**UPI-leg progress (live):** Phases 1–2 of `EXECUTION_PLAN_UPI_LEG.md` landed on `main`
+in commit `03b172a` (2026-09-05, verified 117 backend tests) — the shared contract +
+Prisma data model + BANK/UPI service handling. Phases 3–8 (the `PayoutRail` port, the
+off-ramp execution that drives `CREDITED`, the PA-CB rule, FIRC wiring, frontend) remain.
 
 Every row names the **doc** that carries the detail: **RM** = `CORRIDOR_ROADMAP.md`,
 **V2** = `CORRIDOR_V2_IMPLEMENTED.md`, **SC** = `SESSION_CAPTURE_2026-09-05.md`,
@@ -68,10 +72,10 @@ The simulated path is fully buildable now, no license.*
 | B1 | **`PayoutRail` port** — `quoteOffRamp` / `execute` / `status`; `getPayoutRail`/`setPayoutRail`, mirrors the settlement port | 🧩 | SC §3.2, EP P3 |
 | B2 | **`simulatedPayoutRail`** — deterministic USDC→INR, returns `railRef` + `CREDITED` | 🧩 | SC §3.2, EP P3 |
 | B3 | **UPI QR / deep link** — `upi://pay?pa=<vpa>&am=<inr>&tn=<ref>&cu=INR`, scannable in the demo | 🧩 | SC §3.2, §4.3, EP P3 |
-| B4 | **`PayoutAccount.method` (BANK\|UPI) + `vpa`** — UPI as a payout method, back-compat default BANK | 🧩🏗️ | SC §3.3, EP P1–P2 |
-| B5 | **VPA validation** `handle@psp` + penny-drop / VPA-validate; store PSP-returned name | 🧩🤝 | SC §3.3, RM §4.14 |
-| B6 | **Drive `CREDITED` via the off-ramp** — no new `PaymentState`; off-ramp is the mechanism on `SETTLING→COMPLETED` | 🧩🏗️ | EP (locked decision 1), SC §3.4 |
-| B7 | **`Payment.payoutRailRef` + `payoutMethod`** — how the INR was delivered, for FIRC + UI | 🧩🏗️ | EP P2 |
+| B4 | **`PayoutAccount.method` (BANK\|UPI) + `vpa`** — UPI as a payout method, back-compat default BANK; BANK/UPI service handling | ✅ (`03b172a`, EP P1–P2) | SC §3.3, EP P1–P2 |
+| B5 | **VPA validation** `handle@psp` shape ✅ (`VPA_REGEX`); penny-drop / VPA-validate + PSP-returned name | 🧩🤝 | SC §3.3, RM §4.14 |
+| B6 | **Drive `CREDITED` via the off-ramp** — no new `PaymentState`; off-ramp is the mechanism on `SETTLING→COMPLETED` | 🧩 (EP P4) | EP (locked decision 1), SC §3.4 |
+| B7 | **`Payment.payoutRailRef` + `payoutMethod`** — how the INR was delivered, for FIRC + UI | ✅ (`03b172a`, EP P2) | EP P2 |
 | B8 | **PA-CB per-transaction limit** — a normal deterministic `Rule` (USD-2,000 class) → FLAG → adjudicator; `legalRef = RBI PA-CB` | 🧩 | SC §3.5, EP P5 |
 | B9 | **FIRC reflects the rail reference** — wire `railRef` + masked destination into the FIRC PDF | 🧩 | SC §3.5, EP P6 |
 | B10 | **Frontend — UPI method + QR + credited** — BANK/UPI toggle on Payout methods; QR + "on its way / credited to name@psp" on payment detail | 🧩 | EP P7 |
@@ -158,26 +162,25 @@ D17 Legal/licensing (EU rail, India AD-bank + PA-CB) — the real critical path.
    (not on `track/frontend`). Build on `main` per RM §1.
 2. Read this file, then the four companion docs in the order in §E.
 3. **Do not rebuild** anything in Section A or C — it already exists on `main`.
-4. To build the demo's headline gap, execute the **UPI leg** via `EXECUTION_PLAN_UPI_LEG.md`,
-   phase by phase (simulated path needs no license, no external account).
-5. **Heads-up (see §7):** a prior session began Phases 1–2/4 of the UPI leg in a scratch
-   worktree but **never committed** it. Treat the execution plan as the authority and
-   re-derive from a clean `main`; don't assume that WIP is correct or present.
-6. Repo conventions: verify before push (tsc + vitest + vite build), `git fetch` + rebase,
+4. To build the demo's headline gap, execute the **UPI leg** via `EXECUTION_PLAN_UPI_LEG.md`.
+   **Phases 1–2 are already done** on `main` (commit `03b172a`, verified) — start at
+   **Phase 3** (the `PayoutRail` port). The simulated path needs no license, no external account.
+5. Repo conventions: verify before push (tsc + vitest + vite build), `git fetch` + rebase,
    **never force-push**, log any `shared/*` change in `INTEGRATION_LOG.txt`, migrations
    committed but not applied.
 
 ---
 
-## 7. Known loose end at time of writing (2026-09-05)
+## 7. UPI-leg build status at time of writing (2026-09-05)
 
-An uncommitted work-in-progress of the UPI leg exists in a **separate session's scratch
-worktree** (Phases ~1–2/4 of `EXECUTION_PLAN_UPI_LEG.md`: `shared/src/{enums,schemas,types}.ts`,
-`payouts/payout-account.service.ts`, `backend/prisma/schema.prisma`, and a
-`20260905060000_upi_leg` migration). It is **not committed, not verified, and not on `main`**.
-It is recorded here only so it is not mistaken for finished work — the execution plan is the
-source of truth for that build. If that session lands and verifies it, mark B4/B6/B7 ✅ and tick
-the EP progress log.
+Phases 1–2 of `EXECUTION_PLAN_UPI_LEG.md` **landed on `main`** in commit `03b172a`, verified
+(117 backend tests, frontend build green): the shared contract (`PAYOUT_METHODS`, `PayoutAccount`
+DTO `method`+`vpa`, `addPayoutAccountSchema` superRefine, `VPA_REGEX`), the Prisma model
+(`PayoutAccount.method`/`vpa` + nullable bank columns, `Payment.payoutMethod`/`payoutRailRef`,
+migration `20260905060000_upi_leg` committed-not-applied), BANK/UPI service handling, and the
+`INTEGRATION_LOG.txt` entry. **Remaining: Phases 3–8** — the `PayoutRail` port + simulated impl
+(B1–B3), the off-ramp execution that drives `CREDITED` (B6), the PA-CB limit rule (B8), FIRC
+wiring (B9), and the frontend UPI method + QR (B10). Pick up at Phase 3.
 
 ---
 
