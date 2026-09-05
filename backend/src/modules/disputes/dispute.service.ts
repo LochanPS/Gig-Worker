@@ -8,6 +8,14 @@ import { audit } from '../../lib/audit.js';
 import { emitToAdmins } from '../../lib/ws.js';
 import { holdForDispute, reverseDisputed, dismissDisputed } from '../payments/payment.service.js';
 import { notify } from '../notifications/notification.service.js';
+import { env } from '../../lib/env.js';
+import { adjudicateDispute, resolveDisputeAction } from '../agent/dispute-adjudicator.js';
+
+// Rough src-minor → USD-minor for the triage value ceiling (not a settlement rate).
+function toUsdMinorApprox(amountMinor: number, ccy: string): number {
+  const perUsd: Record<string, number> = { USD: 1, EUR: 1.08, INR: 1 / 83 };
+  return Math.round(amountMinor * (perUsd[ccy] ?? 1));
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serialize(d: any) {
@@ -45,6 +53,43 @@ export async function raiseDispute(userId: string, role: Role, input: RaiseDispu
   const counterparty = payment.companyId === userId ? payment.freelancerId : payment.companyId;
   await notify(counterparty, 'DISPUTE_RAISED', `A dispute was opened on a payment: "${input.reason}"`);
   emitToAdmins({ type: 'notification.new', notification: { id: dispute.id, userId: 'admins', kind: 'DISPUTE_RAISED', message: `Dispute opened on payment ${input.paymentId.slice(0, 8)}`, read: false, createdAt: dispute.createdAt.toISOString() } });
+
+  // AI dispute triage (roadmap #1): recommend REFUND/DISMISS with confidence and
+  // auto-resolve the confident, low-risk cases; ambiguous / serious / high-value
+  // disputes stay OPEN for a human with the recommendation attached. Mirrors the
+  // payment adjudicator, is confidence-gated, and never blocks the raise on failure.
+  if (env.AI_ADJUDICATION) {
+    try {
+      const [payer, payee] = await Promise.all([
+        prisma.user.findUnique({ where: { id: payment.companyId } }),
+        prisma.user.findUnique({ where: { id: payment.freelancerId } }),
+      ]);
+      const adj = await adjudicateDispute({
+        reason: input.reason,
+        raisedByRole: role,
+        facts: {
+          payerName: payer?.name ?? 'payer',
+          payeeName: payee?.name ?? 'payee',
+          amountUsdMinor: toUsdMinorApprox(payment.srcAmountMinor, payment.srcCurrency),
+        },
+      });
+      const act = resolveDisputeAction(adj);
+      const note = `[${act} · ${(adj.confidence * 100) | 0}% confidence] ${adj.rationale}`;
+      if (act === 'AUTO_REFUND') {
+        await resolveDispute(dispute.id, `ai:${adj.by}`, 'REFUND', note);
+      } else if (act === 'AUTO_DISMISS') {
+        await resolveDispute(dispute.id, `ai:${adj.by}`, 'DISMISS', note);
+      } else {
+        // ESCALATE: keep OPEN, attach the recommendation for the human queue.
+        await prisma.dispute.update({ where: { id: dispute.id }, data: { resolutionNote: `AI recommendation: ${note}` } });
+      }
+      await audit(`ai:${adj.by}`, `DISPUTE_ADJUDICATED_${act}`, `dispute:${dispute.id}`, null, { confidence: adj.confidence, action: act });
+    } catch {
+      /* any failure: leave the dispute OPEN for a human — never auto-act on error */
+    }
+    return serialize(await prisma.dispute.findUniqueOrThrow({ where: { id: dispute.id } }));
+  }
+
   return serialize(dispute);
 }
 

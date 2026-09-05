@@ -6,7 +6,7 @@ this document is the **detailed as-built** — the expansion of roadmap §3 into
 subsystem-by-subsystem reference so a new device can understand exactly what is
 implemented, where it lives, and how it behaves, without re-reading the code first.*
 
-**Scope of truth:** everything below is present on `main` and verified (127 backend
+**Scope of truth:** everything below is present on `main` and verified (133 backend
 tests, 34 forge tests, frontend typecheck + `vite build` green) unless a line explicitly
 says *proposed* or *not built*. Where this doc and the source ever disagree, **the source
 wins** — this is a map, not the territory.
@@ -132,6 +132,11 @@ paying company or an admin (`assertPayer`); reads require either party or an adm
   auto-rejected / escalated and the share settled without a human, from AuditLog rows +
   decision notes (no schema change). Surfaced on the Operator monitor with a live feed of
   each call's confidence + rationale.
+- **Dispute triage (`agent/dispute-adjudicator.ts`, DONE):** the same pattern applied to
+  disputes. On raise it recommends `AUTO_REFUND / AUTO_DISMISS / ESCALATE` with confidence;
+  confident low-risk cases auto-resolve (reverse or dismiss through the existing dispute
+  path), while fraud/legal claims and high-value disputes always escalate and stay OPEN with
+  the recommendation attached for the human queue. Gated by `AI_ADJUDICATION`; 6 unit tests.
 
 ### 3.7 FX (`fx/`)
 - FX **quote + rate-lock** with a countdown; free **reference** rate today (`fallback.json`
@@ -205,7 +210,7 @@ hosting time. Frontend defaults `VITE_API_BASE` to the Railway backend when unse
 
 ## 6. Verification / how to prove it (no pnpm needed — local bins)
 - shared: `cd shared && ./node_modules/.bin/tsc`
-- backend: `cd backend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vitest run`  → 127 tests
+- backend: `cd backend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vitest run`  → 133 tests
 - frontend: `cd frontend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vite build`
 - contracts: `cd contracts && forge test`  → 34 tests
 
@@ -220,7 +225,7 @@ gitignored — rebuild `shared` after editing `shared/src`.
 |---|---|---|
 | Backend | ~95% | external vendor integrations are seams, not live |
 | Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) + **INR off-ramp / UPI leg (simulated rail)** | audit, real USDC, kill-switch, custody, public testnet, **real licensed PA-CB rail** |
-| Agent | explanation ✓ + payment adjudication ✓ + metrics ✓ | dispute triage, tuning, case management |
+| Agent | explanation ✓ + payment adjudication ✓ + metrics ✓ + dispute triage ✓ | tuning, case management |
 | Frontend | ~98% | rich-charts variant decision (roadmap #8) |
 
 The **UPI leg / INR off-ramp** (once the most demo-relevant gap) is now **built** (simulated

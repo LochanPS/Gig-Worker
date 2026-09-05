@@ -61,7 +61,7 @@ Reconciling either into the live app is a deliberate future decision, not automa
 
 ---
 
-## 3. What's BUILT (verified: 127 backend tests, typecheck + vite build green)
+## 3. What's BUILT (verified: 133 backend tests, typecheck + vite build green)
 Backend modules: `auth, verification, customers, directory, payments, payrun,
 schedules, invoices, payouts, disputes, compliance, agent, alerts, fx, settlement,
 documents, credentials, notifications, admin` — 60 routes.
@@ -103,9 +103,11 @@ toggles company/freelancer/admin.
 ## 4. ROADMAP — ordered, with owner (🤖 = buildable in a session · 🤝 = needs you)
 
 ### Now / near (buildable in a device session)
-1. 🤖 **Dispute AI triage** — mirror the payment adjudicator for disputes
-   (auto-recommend refund/dismiss + confidence, escalate the rest). Reuses
-   `agent/adjudicator.ts`; backend-contained.
+1. ✅ **Dispute AI triage** — DONE. `agent/dispute-adjudicator.ts` mirrors the payment
+   adjudicator: when a dispute is raised it recommends AUTO_REFUND / AUTO_DISMISS / ESCALATE
+   with confidence; confident low-risk cases auto-resolve (reverse or dismiss), while
+   fraud/legal claims and high-value disputes always escalate — kept OPEN with the
+   recommendation attached for the human queue. Gated by `AI_ADJUDICATION`; 6 unit tests.
 2. ✅ **Persisted adjudication metrics + audit feed** — DONE. `GET /admin/adjudications`
    counts auto-cleared / auto-rejected / escalated and the share settled without a
    human, read from the AuditLog rows + decision notes the adjudicator already
@@ -175,7 +177,7 @@ toggles company/freelancer/admin.
 |---|---|---|
 | Backend | ~95% | external vendor integrations are seams, not live |
 | Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) + INR off-ramp / UPI leg (simulated rail) | audit, real USDC, kill-switch, custody, public testnet, real PA-CB rail |
-| Agent | explanation ✓ + payment adjudication ✓ + adjudication metrics ✓ | dispute triage, tuning, case management |
+| Agent | explanation ✓ + payment adjudication ✓ + metrics ✓ + dispute triage ✓ | tuning, case management |
 | Frontend | ~98% | rich-charts variant (item 8) is the only open frontend decision |
 
 ---

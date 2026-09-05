@@ -11,7 +11,7 @@ plainly whether the thing is **built**, **spec'd**, or **needs an external partn
 `SESSION_CAPTURE_2026-09-05.md` (session + UPI spec) → `EXECUTION_PLAN_UPI_LEG.md` (build plan).
 
 **Status legend**
-- ✅ **BUILT** — present on `main`, verified (127 backend tests · 34 forge tests · frontend tsc + `vite build`).
+- ✅ **BUILT** — present on `main`, verified (133 backend tests · 34 forge tests · frontend tsc + `vite build`).
 - 🧩 **SPEC'D** — designed in full in a doc, **not yet code** (buildable now, no external dependency).
 - 🤝 **NEEDS YOU** — blocked on an external partner, license, key, or asset; code seam may already exist.
 
@@ -116,7 +116,7 @@ Full reconciliation table: **SC §2**.*
 **Buildable in a device session (🤖):**
 | # | Item | Status | Detail |
 |---|---|---|---|
-| D1 | **Dispute AI triage** — mirror `agent/adjudicator.ts` for disputes (recommend refund/dismiss + confidence, escalate rest) | 🧩 | RM §4.1, SC §4.2, EP "adjacent item" |
+| D1 | **Dispute AI triage** — `agent/dispute-adjudicator.ts` mirrors the payment adjudicator on dispute-raise: AUTO_REFUND / AUTO_DISMISS / ESCALATE + confidence; auto-resolves confident low-risk cases, always escalates fraud/legal + high-value | ✅ | RM §4.1, SC §4.2 |
 | D2 | **Logo swap** — replace amber "C" tile once the asset is provided | 🤝 (asset) | RM §4.5 |
 
 **Deploy / chain (mostly 🤝):**

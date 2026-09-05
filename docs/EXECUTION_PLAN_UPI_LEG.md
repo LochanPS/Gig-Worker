@@ -132,10 +132,11 @@ Files: `docs/CORRIDOR_ROADMAP.md`, `docs/CORRIDOR_V2_IMPLEMENTED.md`,
 - frontend: `cd frontend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vite build`
 A phase is not "done" and is never pushed until its gate is green.
 
-## Adjacent buildable item (optional, not part of the UPI leg)
-- **Dispute AI triage (roadmap #1)** — mirror `agent/adjudicator.ts` for disputes
-  (auto-recommend refund/dismiss + confidence, escalate the rest). Backend-contained, one
-  session. Can follow Phase 8 if wanted.
+## Adjacent buildable item — ✅ DONE (2026-09-05)
+- **Dispute AI triage (roadmap #1)** — built in `agent/dispute-adjudicator.ts`, mirroring the
+  payment adjudicator: AUTO_REFUND / AUTO_DISMISS / ESCALATE + confidence, auto-resolving
+  confident low-risk disputes and always escalating fraud/legal + high-value. Backend-contained,
+  6 unit tests, gated by `AI_ADJUDICATION`.
 
 ## Progress log (update as phases land)
 - ☑ P0 baseline · ☑ P1 shared · ☑ P2 prisma · ☑ P3 rail · ☑ P4 orchestrator ·
