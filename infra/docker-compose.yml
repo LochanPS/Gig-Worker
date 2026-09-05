@@ -41,7 +41,9 @@ services:
       postgres:
         condition: service_healthy
       anvil:
-        condition: service_started
+        # service_healthy, not service_started: real settlement deploys contracts
+        # at boot, so the chain has to be answering RPC, not just launched.
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://gigbridge:gigbridge@postgres:5432/gigbridge
       JWT_SECRET: dev-only-change-me
@@ -57,6 +59,14 @@ services:
       FX_OFFLINE: "true"
       PORT: "4000"
       NODE_ENV: production
+      # The stack already boots a chain, so use it: settle for real against anvil.
+      # Without this the contracts deployed next door went untouched and every
+      # tx hash was random bytes, which is the one thing the UI cannot tell apart
+      # by itself. Contracts deploy on boot from the committed bytecode, and the
+      # accounts are anvil's own — no testnet, no funded wallet, nothing to top up.
+      # If the chain is unreachable the backend still boots and says so (the
+      # settlement badge reads "chain unreachable"), so this cannot wedge the demo.
+      SETTLEMENT_MODE: "real"
     # Schema, then demo data, then serve. Idempotent: re-running `up` re-applies
     # nothing and re-seeds onto the same fixed demo ids.
     command: >
