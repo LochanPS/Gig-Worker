@@ -161,4 +161,7 @@ export const api = {
   adjudications: () => req<AdjudicationSummary>('/admin/adjudications'),
   treasury: () => req<Treasury>('/admin/treasury'),
   rules: () => req<Array<{ id: string; jurisdiction: string; severity: string; legalRef: string }>>('/admin/rules'),
+
+  // Is the backend actually settling on-chain? Unauthenticated, so it works before login.
+  meta: () => req<{ settlementMode: 'real' | 'simulated'; chainId: number | null; addresses: Record<string, string> | null }>('/meta'),
 };

@@ -338,6 +338,10 @@ model Dispute {
   resolutionNote String?
   resolvedById   String?
   resolvedBy     User?         @relation("DisputeResolver", fields: [resolvedById], references: [id])
+  // The AI adjudicator is not a User row, so it cannot go in resolvedById (that column
+  // is a foreign key). Recording the agent separately keeps referential integrity for
+  // human resolvers while still attributing an auto-resolution.
+  resolvedByAgent String?
   createdAt      DateTime      @default(now())
   resolvedAt     DateTime?
 

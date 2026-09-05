@@ -1,17 +1,14 @@
-// Small hashing helpers. keccak256 here is a stand-in using sha3-256 semantics
-// via Node's crypto where available; P1's viem utils are authoritative on-chain.
-// For the backend we only need a stable 32-byte hex the contract can store.
-import { createHash } from 'node:crypto';
+// Hashing helpers. These MUST agree with the chain: the credential hash stored in
+// the DB is the value a verifier matches against the IdentityRegistry record, and
+// the compliance hash is passed into EscrowVault.fund(). Ethereum's keccak256 is
+// NOT SHA3-256 (different padding), so use viem's implementation rather than
+// node:crypto's 'sha3-256' — the two produce different digests for the same input.
+import { keccak256 as viemKeccak256, toBytes } from 'viem';
 
 export function toUtf8(s: string): Buffer {
   return Buffer.from(s, 'utf8');
 }
 
-// Node exposes sha3-256 through OpenSSL; fall back to sha256 if unavailable.
-export function keccak256(data: Buffer): string {
-  try {
-    return '0x' + createHash('sha3-256').update(data).digest('hex');
-  } catch {
-    return '0x' + createHash('sha256').update(data).digest('hex');
-  }
+export function keccak256(data: Buffer | string): string {
+  return viemKeccak256(typeof data === 'string' ? toBytes(data) : new Uint8Array(data));
 }

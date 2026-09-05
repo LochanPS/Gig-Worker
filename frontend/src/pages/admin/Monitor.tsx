@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { Alert, Dispute, AdminMetrics, CustomerSummary, AdjudicationSummary } from '@gigbridge/shared';
+import type { Alert, Dispute, AdminMetrics, CustomerSummary, AdjudicationSummary, WsEvent } from '@gigbridge/shared';
 import { api, type ReviewQueueItem } from '../../lib/api.js';
 import { useWs } from '../../lib/ws.js';
 import { money, Chip, Stat } from '../../components/bits.js';
 import RuleResults from '../../components/RuleResults.js';
+import TxLink from '../../components/TxLink.js';
+import { useIsOnChain } from '../../lib/meta.js';
 
 export default function Monitor() {
   const [queue, setQueue] = useState<ReviewQueueItem[]>([]);
@@ -12,6 +14,11 @@ export default function Monitor() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [adj, setAdj] = useState<AdjudicationSummary | null>(null);
+  // Events straight off the chain, newest first. These arrive when the network mines
+  // a settlement event — independent of our own state machine — so they are the
+  // strongest available proof that settlement is genuinely on-chain.
+  const [chainEvents, setChainEvents] = useState<Extract<WsEvent, { type: 'chain.event' }>[]>([]);
+  const onChain = useIsOnChain();
   const load = () => {
     api.queue().then(setQueue).catch(() => {});
     api.alerts().then(setAlerts).catch(() => {});
@@ -25,6 +32,7 @@ export default function Monitor() {
     // The server pushes metrics every few seconds; take them straight off the
     // wire rather than re-polling every endpoint on a timer.
     if (e.type === 'metrics.tick') setMetrics(e.metrics);
+    else if (e.type === 'chain.event') setChainEvents((prev) => [e, ...prev].slice(0, 12));
     else if (e.type === 'alert.new' || e.type === 'payment.state' || e.type === 'notification.new') load();
   });
 
@@ -34,7 +42,7 @@ export default function Monitor() {
   const openDisputes = disputes.filter((d) => d.status === 'OPEN');
   // Disputes the agent closed on its own. These used to vanish from this page
   // entirely (it only listed OPEN), hiding the dispute-triage half of the agent.
-  const aiResolved = disputes.filter((d) => d.status !== 'OPEN' && (d.resolvedById ?? '').startsWith('ai:'));
+  const aiResolved = disputes.filter((d) => d.status !== 'OPEN' && !!d.resolvedByAgent);
   const verified = customers.filter((c) => c.verified).length;
 
   return (
@@ -63,6 +71,31 @@ export default function Monitor() {
         <div><div className="label">Open alerts</div><div className="val" style={{ fontSize: 24 }}>{alerts.length}</div></div>
         <div><div className="label">Verified customers</div><div className="val" style={{ fontSize: 24 }}>{verified}</div></div>
       </div>
+
+      {onChain && (
+        <>
+          <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>On-chain events (live)</h2>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
+            <table>
+              <thead><tr><th>Event</th><th>Escrow id</th><th>Transaction</th><th>Block</th><th>At</th></tr></thead>
+              <tbody>
+                {chainEvents.map((e) => (
+                  <tr key={`${e.txHash}-${e.eventName}`}>
+                    <td><Chip value={e.eventName === 'PaymentReleased' ? 'APPROVE' : e.eventName === 'PaymentRefunded' ? 'REVERSED' : 'FLAG'} /> <b style={{ marginLeft: 6 }}>{e.eventName}</b></td>
+                    <td className="mono muted" style={{ fontSize: 11 }}>{e.escrowId ? e.escrowId.slice(0, 14) + '…' : '—'}</td>
+                    <td><TxLink hash={e.txHash} truncate={16} /></td>
+                    <td className="mono">{e.blockNumber ?? '—'}</td>
+                    <td className="muted">{new Date(e.at).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+                {chainEvents.length === 0 && (
+                  <tr><td colSpan={5} className="muted">Listening to EscrowVault — events appear here as the chain mines them.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Needs your review — AI escalations</h2>
       <div className="grid" style={{ marginBottom: 24 }}>
@@ -119,7 +152,7 @@ export default function Monitor() {
                       <td><Chip value={d.status === 'RESOLVED_REFUND' ? 'REVERSED' : 'APPROVE'} /></td>
                       <td className="mono">{t.confidence ?? '—'}</td>
                       <td className="muted" style={{ maxWidth: 420 }}>{t.rationale ?? d.resolutionNote ?? '—'}</td>
-                      <td className="muted mono" style={{ fontSize: 11 }}>{(d.resolvedById ?? '').replace(/^ai:/, '')}</td>
+                      <td className="muted mono" style={{ fontSize: 11 }}>{(d.resolvedByAgent ?? '').replace(/^ai:/, '')}</td>
                     </tr>
                   );
                 })}

@@ -92,7 +92,7 @@ async function seedUser(u: SeedUser) {
         anchorTxHash: '0x' + randomBytes(32).toString('hex'),
       },
     });
-    // Verified freelancers get an INR payout account so payouts have a destination
+    // Verified freelancers get a payout account so payouts have a destination
     // (the PAYOUT_FAILED gate). New self-serve signups add theirs via the UI.
     if (u.role === 'FREELANCER') {
       await prisma.payoutAccount.create({
@@ -100,11 +100,42 @@ async function seedUser(u: SeedUser) {
           userId: u.id,
           label: `${u.country === 'IN' ? 'HDFC' : 'Wise'} account`,
           currency: 'INR',
+          method: 'BANK',
           accountName: u.name,
           accountNumberMasked: '••••' + Math.floor(1000 + Math.random() * 9000),
           bankIdentifier: u.country === 'IN' ? 'HDFC0001234' : 'TRWIBEB1XXX',
         },
       });
+      // India's instant rail. Created AFTER the bank row on purpose: creditPayee
+      // takes the most recently added account for the currency, so the INR leg
+      // lands on UPI (the scannable upi:// intent + FIRC reference) while the
+      // bank row stays visible as the alternative method.
+      if (u.country === 'IN') {
+        await prisma.payoutAccount.create({
+          data: {
+            userId: u.id,
+            label: 'UPI',
+            currency: 'INR',
+            method: 'UPI',
+            vpa: `${u.name.split(' ')[0].toLowerCase()}@okhdfc`,
+          },
+        });
+      }
+      // A non-IN freelancer needs an account in their OWN currency too, or picking
+      // that currency as the destination drops the payment into PAYOUT_FAILED.
+      if (u.country === 'US') {
+        await prisma.payoutAccount.create({
+          data: {
+            userId: u.id,
+            label: 'US checking',
+            currency: 'USD',
+            method: 'BANK',
+            accountName: u.name,
+            accountNumberMasked: '••••' + Math.floor(1000 + Math.random() * 9000),
+            bankIdentifier: 'CHASUS33XXX',
+          },
+        });
+      }
     }
   }
 }

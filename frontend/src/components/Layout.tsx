@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../lib/auth.js';
 import NotificationBell from './NotificationBell.js';
 import Toasts from './Toasts.js';
+import { useMeta } from '../lib/meta.js';
+import { chainMeta } from '../lib/chain.js';
 
 // Minimal inline icon set (no icon dependency) — 24px stroke glyphs.
 const I = {
@@ -45,6 +47,8 @@ export default function Layout({ children }: { children: ReactNode }) {
           <span>Corridor<div className="sub-brand">Cross-border payouts</div></span>
         </div>
 
+        <NetworkBadge />
+
         {user?.role === 'COMPANY' && <>
           <NavLink to="/company" end><Icon d={I.home} />Overview</NavLink>
           <NavLink to="/company/pay"><Icon d={I.pay} />New payout</NavLink>
@@ -79,6 +83,24 @@ export default function Layout({ children }: { children: ReactNode }) {
       </nav>
       <main className="main">{children}</main>
       <Toasts />
+    </div>
+  );
+}
+
+// Says out loud whether money is really moving on a chain. The backend is the only
+// authority on this: SETTLEMENT_MODE=real can fail its handshake and fall back to
+// simulated, and simulated tx hashes are random bytes that look entirely real. On
+// stage this badge is what stops you claiming an on-chain settlement that isn't one.
+function NetworkBadge() {
+  const { settlementMode, chainId } = useMeta();
+  const live = settlementMode === 'real';
+  const name = chainId ? chainMeta(chainId).name : chainMeta().name;
+  return (
+    <div className={`netbadge ${live ? 'live' : 'sim'}`} title={live
+      ? `Settling on ${name}. Transaction hashes are real and open on the block explorer.`
+      : 'Simulated settlement — the payment lifecycle is real, but no chain is involved and tx hashes are placeholders.'}>
+      <span className="netdot" />
+      {live ? <><b>{name}</b> · live on-chain</> : <>Simulated settlement</>}
     </div>
   );
 }

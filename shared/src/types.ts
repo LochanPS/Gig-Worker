@@ -248,6 +248,9 @@ export interface Dispute {
   status: DisputeStatus;
   resolutionNote: string | null;
   resolvedById: string | null;
+  // Set instead of resolvedById when the AI adjudicator closed it (that column is a
+  // FK to User, and the agent is not a user).
+  resolvedByAgent: string | null;
   createdAt: string;
   resolvedAt: string | null;
 }

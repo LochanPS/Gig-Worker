@@ -32,6 +32,15 @@ const envSchema = z.object({
   // (BUILD_CONTRACTS §5 says every 5s) and how often stale rate locks are swept.
   METRICS_TICK_SECONDS: z.coerce.number().default(5),
   RATE_LOCK_SWEEP_SECONDS: z.coerce.number().default(60),
+  // Real settlement is normally best-effort: if the chain is unreachable the backend
+  // still boots on simulated settlement so a demo never dies on a network blip. That
+  // is dangerous when you MEANT to be on-chain, because simulated returns
+  // random-looking tx hashes that are indistinguishable from real ones. Set this to
+  // refuse to boot instead, so "real" can never silently mean "fake".
+  SETTLEMENT_STRICT: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
   // AI adjudication of FLAGGED payments. On by default: the agent auto-clears or
   // auto-rejects confident cases and escalates only the rest to the human queue.
   // Set false to send every flag straight to a human.

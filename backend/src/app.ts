@@ -21,6 +21,7 @@ import { payRunRoutes } from './modules/payrun/payrun.routes.js';
 import { scheduleRoutes } from './modules/schedules/schedule.routes.js';
 import { payoutAccountRoutes } from './modules/payouts/payout-account.routes.js';
 import { disputeRoutes } from './modules/disputes/dispute.routes.js';
+import { getSettlementStatus } from './modules/settlement/settlement.interface.js';
 import { customerRoutes } from './modules/customers/customer.routes.js';
 
 // HTTP status -> stable error code for the {error:{code,message}} contract
@@ -60,6 +61,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(
     async (api) => {
+      // Is settlement ACTUALLY on-chain right now? SETTLEMENT_MODE=real is only a
+      // request — the handshake can fail and fall back to simulated, whose tx hashes
+      // are random bytes that look exactly like real ones. The UI reads this to label
+      // the network and to stop linking fake hashes at a block explorer. Unauthed on
+      // purpose: it exposes only the mode, chain id and public contract addresses.
+      api.get('/meta', async () => getSettlementStatus());
       await api.register(authRoutes);
       await api.register(paymentRoutes);
       await api.register(complianceRoutes);

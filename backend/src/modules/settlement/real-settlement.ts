@@ -13,7 +13,9 @@ import { privateKeyToAccount } from "viem/accounts";
 import { ensureDeployed } from "@gigbridge/contracts";
 import { createChainOps, type ChainOps } from "@gigbridge/contracts/chain";
 import { prisma } from "../../lib/db.js";
-import { setSettlement, type FundResult, type Settlement } from "./settlement.interface.js";
+import { setSettlement, setSettlementMode, type FundResult, type Settlement } from "./settlement.interface.js";
+import { emitToAdmins } from "../../lib/ws.js";
+import { env } from "../../lib/env.js";
 
 type Logger = { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void };
 const noopLog: Logger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -130,19 +132,46 @@ export async function ensureChainReady(log: Logger = noopLog): Promise<ChainOps>
  * default and backend behaviour is unchanged.
  */
 export async function enableRealSettlement(log: Logger = noopLog): Promise<boolean> {
-  if ((process.env.SETTLEMENT_MODE ?? "simulated").toLowerCase() !== "real") return false;
+  if ((process.env.SETTLEMENT_MODE ?? "simulated").toLowerCase() !== "real") {
+    setSettlementMode("simulated");
+    return false;
+  }
   try {
     const ops = await ensureChainReady(log);
     setSettlement(createRealSettlement(ops));
-    // Live on-chain feed (PRD FR-5.3): log every settlement event as anvil mines it.
+    // Live on-chain feed (PRD FR-5.3). The chain is the source of truth here: these
+    // events fire when the network mines them, not when our own state machine moves,
+    // so pushing them to the operator monitor is the strongest proof on offer that
+    // settlement is genuinely on-chain.
     ops.watchEscrow((e) => {
       const id = typeof e.args.id === "string" ? e.args.id : "";
       log.info(`chain event ${e.eventName} id=${id} tx=${e.txHash} block=${e.blockNumber ?? "?"}`);
+      emitToAdmins({
+        type: "chain.event",
+        eventName: e.eventName,
+        escrowId: id,
+        txHash: e.txHash,
+        blockNumber: e.blockNumber === null ? null : Number(e.blockNumber),
+        at: new Date().toISOString(),
+      });
     });
+    setSettlementMode("real", Number(process.env.CHAIN_ID ?? 31337), ops.addresses);
     log.info("real-settlement: ENABLED (on-chain settlement active + event listener)");
     return true;
   } catch (err) {
-    log.warn(`real-settlement: chain unavailable, staying on simulated settlement (${(err as Error).message})`);
+    const msg = (err as Error).message;
+    // SETTLEMENT_MODE=real was asked for and could not be delivered. Falling back is
+    // the right default for a live demo on bad wifi, but it means every tx hash the
+    // UI shows afterwards is fake while looking real. Under SETTLEMENT_STRICT that
+    // silence is worse than a crash.
+    if (env.SETTLEMENT_STRICT) {
+      log.error(`real-settlement: STRICT mode and the chain is unusable — refusing to boot. ${msg}`);
+      throw new Error(
+        `SETTLEMENT_MODE=real with SETTLEMENT_STRICT=true, but real settlement could not start: ${msg}`,
+      );
+    }
+    setSettlementMode("simulated");
+    log.warn(`real-settlement: chain unavailable, staying on simulated settlement (${msg})`);
     return false;
   }
 }

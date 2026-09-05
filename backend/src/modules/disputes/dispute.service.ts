@@ -28,6 +28,7 @@ function serialize(d: any) {
     status: d.status,
     resolutionNote: d.resolutionNote ?? null,
     resolvedById: d.resolvedById ?? null,
+    resolvedByAgent: d.resolvedByAgent ?? null,
     createdAt: d.createdAt.toISOString(),
     resolvedAt: d.resolvedAt ? d.resolvedAt.toISOString() : null,
   };
@@ -76,16 +77,21 @@ export async function raiseDispute(userId: string, role: Role, input: RaiseDispu
       const act = resolveDisputeAction(adj);
       const note = `[${act} · ${(adj.confidence * 100) | 0}% confidence] ${adj.rationale}`;
       if (act === 'AUTO_REFUND') {
-        await resolveDispute(dispute.id, `ai:${adj.by}`, 'REFUND', note);
+        await resolveDispute(dispute.id, null, 'REFUND', note, `ai:${adj.by}`);
       } else if (act === 'AUTO_DISMISS') {
-        await resolveDispute(dispute.id, `ai:${adj.by}`, 'DISMISS', note);
+        await resolveDispute(dispute.id, null, 'DISMISS', note, `ai:${adj.by}`);
       } else {
         // ESCALATE: keep OPEN, attach the recommendation for the human queue.
         await prisma.dispute.update({ where: { id: dispute.id }, data: { resolutionNote: `AI recommendation: ${note}` } });
       }
       await audit(`ai:${adj.by}`, `DISPUTE_ADJUDICATED_${act}`, `dispute:${dispute.id}`, null, { confidence: adj.confidence, action: act });
-    } catch {
-      /* any failure: leave the dispute OPEN for a human — never auto-act on error */
+    } catch (err) {
+      // Never auto-act on error: the dispute stays OPEN for a human. But do NOT stay
+      // silent — a swallowed failure here looks identical to "the agent chose not to
+      // act", which hides a broken triage path behind a plausible outcome.
+      console.warn(
+        `dispute ${dispute.id}: AI triage failed, left OPEN for a human — ${(err as Error).message}`,
+      );
     }
     return serialize(await prisma.dispute.findUniqueOrThrow({ where: { id: dispute.id } }));
   }
@@ -93,21 +99,39 @@ export async function raiseDispute(userId: string, role: Role, input: RaiseDispu
   return serialize(dispute);
 }
 
-export async function resolveDispute(disputeId: string, adminId: string, action: 'REFUND' | 'DISMISS', note: string) {
+/**
+ * Resolve a dispute. `adminId` is a real User id for a human resolver; the AI
+ * adjudicator passes null plus `agent` (e.g. 'ai:ai-heuristic'), because
+ * Dispute.resolvedById is a foreign key and would reject a non-user string.
+ */
+export async function resolveDispute(
+  disputeId: string,
+  adminId: string | null,
+  action: 'REFUND' | 'DISMISS',
+  note: string,
+  agent?: string,
+) {
+  const actor = agent ?? adminId ?? 'system';
   const dispute = await prisma.dispute.findUniqueOrThrow({ where: { id: disputeId }, include: { payment: true } });
   if (dispute.status !== 'OPEN') throw Object.assign(new Error(`Dispute already ${dispute.status}`), { statusCode: 409 });
 
   if (action === 'REFUND') {
-    await reverseDisputed(dispute.paymentId, adminId);
+    await reverseDisputed(dispute.paymentId, actor);
   } else {
-    await dismissDisputed(dispute.paymentId, adminId);
+    await dismissDisputed(dispute.paymentId, actor);
   }
 
   const updated = await prisma.dispute.update({
     where: { id: disputeId },
-    data: { status: action === 'REFUND' ? 'RESOLVED_REFUND' : 'RESOLVED_DISMISS', resolutionNote: note, resolvedById: adminId, resolvedAt: new Date() },
+    data: {
+      status: action === 'REFUND' ? 'RESOLVED_REFUND' : 'RESOLVED_DISMISS',
+      resolutionNote: note,
+      resolvedById: adminId,
+      resolvedByAgent: agent ?? null,
+      resolvedAt: new Date(),
+    },
   });
-  await audit(adminId, 'DISPUTE_RESOLVED', `dispute:${disputeId}`, { status: 'OPEN' }, { action, note });
+  await audit(actor, 'DISPUTE_RESOLVED', `dispute:${disputeId}`, { status: 'OPEN' }, { action, note });
 
   const p = dispute.payment;
   const msg = action === 'REFUND' ? `Dispute resolved — payment reversed. ${note}` : `Dispute dismissed — payment stands. ${note}`;
