@@ -337,3 +337,16 @@ FRONTEND: NewPayout rebuilt as the 4-step wizard (UI_SPEC 3.2) — stepper, paye
   pickers, live quote with the vs-incumbent strip, and a rate-lock countdown ring
   that disables confirm when the lock lapses. Overview / freelancer Home /
   History / PaymentDetail render names instead of UUID prefixes.
+
+2026-09-05 — UPI LEG / INR OFF-RAMP (last mile), phase 1: contract + data model
+SHARED: enums.ts += PAYOUT_METHODS ['BANK','UPI'] + PayoutMethod. types.ts
+  PayoutAccount += method, vpa; accountName/accountNumberMasked/bankIdentifier are
+  now nullable (a UPI method has no bank fields). schemas.ts addPayoutAccountSchema
+  gains optional `method` (absent ⇒ BANK, back-compat) + `vpa` (VPA_REGEX), with a
+  superRefine requiring the right fields per method. Additive — existing BANK
+  callers are unchanged.
+BACKEND: prisma PayoutAccount += method (default 'BANK') + vpa, bank columns made
+  nullable; Payment += payoutMethod + payoutRailRef (how the INR was delivered
+  off-ramp). Migration 20260905060000_upi_leg (committed, not applied).
+  payout-account.service.ts create()/serialize() handle BANK vs UPI;
+  hasActivePayoutAccount() unchanged — a UPI account is a valid INR destination.

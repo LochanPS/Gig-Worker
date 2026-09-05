@@ -15,26 +15,36 @@ function serialize(a: any) {
     userId: a.userId,
     label: a.label,
     currency: a.currency,
-    accountName: a.accountName,
-    accountNumberMasked: a.accountNumberMasked,
-    bankIdentifier: a.bankIdentifier,
+    method: a.method ?? 'BANK',
+    accountName: a.accountName ?? null,
+    accountNumberMasked: a.accountNumberMasked ?? null,
+    bankIdentifier: a.bankIdentifier ?? null,
+    vpa: a.vpa ?? null,
     active: a.active,
     createdAt: a.createdAt.toISOString(),
   };
 }
 
 export async function addPayoutAccount(userId: string, input: AddPayoutAccountInput) {
+  // Absent method ⇒ BANK (back-compat). UPI stores only a VPA; BANK stores the masked
+  // account + identifier. The schema (superRefine) guarantees the right fields are present.
+  const isUpi = input.method === 'UPI';
   const a = await prisma.payoutAccount.create({
     data: {
       userId,
       label: input.label,
       currency: input.currency,
-      accountName: input.accountName,
-      accountNumberMasked: mask(input.accountNumber),
-      bankIdentifier: input.bankIdentifier,
+      method: isUpi ? 'UPI' : 'BANK',
+      accountName: isUpi ? null : input.accountName!,
+      accountNumberMasked: isUpi ? null : mask(input.accountNumber!),
+      bankIdentifier: isUpi ? null : input.bankIdentifier!,
+      vpa: isUpi ? input.vpa! : null,
     },
   });
-  await audit(userId, 'PAYOUT_ACCOUNT_ADDED', `payoutAccount:${a.id}`, null, { currency: input.currency });
+  await audit(userId, 'PAYOUT_ACCOUNT_ADDED', `payoutAccount:${a.id}`, null, {
+    currency: input.currency,
+    method: isUpi ? 'UPI' : 'BANK',
+  });
   return serialize(a);
 }
 

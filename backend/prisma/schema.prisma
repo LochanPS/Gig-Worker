@@ -189,6 +189,10 @@ model Payment {
   complianceDecisionId String?
   txHashFund           String?
   txHashRelease        String?
+  // UPI leg / INR off-ramp last mile: how the INR was delivered to the payee
+  // after on-chain release (BANK | UPI) and the off-ramp rail's reference.
+  payoutMethod         String?
+  payoutRailRef        String?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
@@ -307,9 +311,13 @@ model PayoutAccount {
   user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   label               String
   currency            String
-  accountName         String
-  accountNumberMasked String
-  bankIdentifier      String
+  method              String   @default("BANK") // BANK | UPI
+  // Bank fields — present for BANK, null for UPI.
+  accountName         String?
+  accountNumberMasked String?
+  bankIdentifier      String?
+  // UPI field — a Virtual Payment Address, present for UPI, null for BANK.
+  vpa                 String?
   active              Boolean  @default(true)
   createdAt           DateTime @default(now())
 

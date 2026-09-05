@@ -20,6 +20,12 @@ export const PAYMENT_STATES = [
 ] as const;
 export type PaymentState = (typeof PAYMENT_STATES)[number];
 
+// How a freelancer receives their payout. BANK = account number + IFSC/IBAN/routing;
+// UPI = a Virtual Payment Address (India's instant rail, e.g. name@okhdfcbank).
+// Additive — an absent method is treated as BANK (back-compat with existing accounts).
+export const PAYOUT_METHODS = ['BANK', 'UPI'] as const;
+export type PayoutMethod = (typeof PAYOUT_METHODS)[number];
+
 // Dispute lifecycle. A dispute puts its payment ON hold (DISPUTED) until an admin
 // resolves it: REFUND reverses the payment, DISMISS restores it.
 export const DISPUTE_STATUSES = ['OPEN', 'RESOLVED_REFUND', 'RESOLVED_DISMISS'] as const;

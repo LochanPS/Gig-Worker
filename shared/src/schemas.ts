@@ -1,6 +1,6 @@
 // Zod request/response schemas — the wire contract (BUILD_CONTRACTS §4).
 import { z } from 'zod';
-import { ROLES, CURRENCIES, PURPOSE_CODES, ESCROW_MODES, CADENCES } from './enums.js';
+import { ROLES, CURRENCIES, PURPOSE_CODES, ESCROW_MODES, CADENCES, PAYOUT_METHODS } from './enums.js';
 
 export const registerSchema = z.object({
   email: z.string().email(),
@@ -117,13 +117,34 @@ export const resolveQueueSchema = z.object({
 });
 
 // --- Add payout method (where the freelancer's money actually lands) ---
-export const addPayoutAccountSchema = z.object({
-  label: z.string().min(1), // e.g. "HDFC savings"
-  currency: z.enum(CURRENCIES),
-  accountName: z.string().min(1),
-  accountNumber: z.string().min(4), // stored masked; demo only
-  bankIdentifier: z.string().min(1), // IFSC / IBAN / routing
-});
+// A payout method is either a BANK account (account number + IFSC/IBAN/routing) or
+// a UPI id (a VPA, India's instant rail). `method` is optional for back-compat — an
+// absent method is treated as BANK. Bank vs UPI fields are conditionally required.
+export const VPA_REGEX = /^[a-zA-Z0-9._-]{2,256}@[a-zA-Z]{2,64}$/; // name@psp
+export const addPayoutAccountSchema = z
+  .object({
+    label: z.string().min(1), // e.g. "HDFC savings" / "GPay"
+    currency: z.enum(CURRENCIES),
+    method: z.enum(PAYOUT_METHODS).optional(), // absent ⇒ BANK
+    accountName: z.string().min(1).optional(),
+    accountNumber: z.string().min(4).optional(), // stored masked; demo only
+    bankIdentifier: z.string().min(1).optional(), // IFSC / IBAN / routing
+    vpa: z.string().regex(VPA_REGEX, 'UPI id must look like name@bank').optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.method === 'UPI') {
+      if (!v.vpa)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['vpa'], message: 'A UPI id is required for a UPI payout method' });
+    } else {
+      // BANK (default)
+      if (!v.accountName)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['accountName'], message: 'An account holder name is required' });
+      if (!v.accountNumber)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['accountNumber'], message: 'An account number is required' });
+      if (!v.bankIdentifier)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['bankIdentifier'], message: 'An IFSC / IBAN / routing id is required' });
+    }
+  });
 export type AddPayoutAccountInput = z.infer<typeof addPayoutAccountSchema>;
 
 // --- Disputes / reversals ---

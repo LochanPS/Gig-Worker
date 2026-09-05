@@ -9,6 +9,7 @@ import type {
   AlertType,
   AlertSeverity,
   Currency,
+  PayoutMethod,
   PurposeCode,
   EscrowMode,
   PayRunStatus,
@@ -224,9 +225,11 @@ export interface PayoutAccount {
   userId: string;
   label: string;
   currency: Currency;
-  accountName: string;
-  accountNumberMasked: string; // only last 4 shown
-  bankIdentifier: string;
+  method: PayoutMethod; // BANK or UPI
+  accountName: string | null; // null for UPI
+  accountNumberMasked: string | null; // only last 4 shown; null for UPI
+  bankIdentifier: string | null; // IFSC / IBAN / routing; null for UPI
+  vpa: string | null; // UPI Virtual Payment Address; null for BANK
   active: boolean;
   createdAt: string;
 }
