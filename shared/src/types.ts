@@ -89,6 +89,10 @@ export interface Payment {
   complianceDecisionId: string | null;
   txHashFund: string | null;
   txHashRelease: string | null;
+  // UPI leg / INR off-ramp: how the payee was credited after on-chain release
+  // (BANK | UPI) and the off-ramp rail's reference. Null until the payment completes.
+  payoutMethod: PayoutMethod | null;
+  payoutRailRef: string | null;
   createdAt: string;
   updatedAt: string;
   timeline: TimelineStep[];

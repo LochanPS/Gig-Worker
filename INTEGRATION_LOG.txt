@@ -350,3 +350,13 @@ BACKEND: prisma PayoutAccount += method (default 'BANK') + vpa, bank columns mad
   off-ramp). Migration 20260905060000_upi_leg (committed, not applied).
   payout-account.service.ts create()/serialize() handle BANK vs UPI;
   hasActivePayoutAccount() unchanged — a UPI account is a valid INR destination.
+
+2026-09-05 (cont.) — UPI LEG phase 4: off-ramp drives the CREDITED step
+SHARED: types.ts Payment += payoutMethod (PayoutMethod|null) + payoutRailRef
+  (string|null) — how the payee was credited after on-chain release. Additive,
+  null until COMPLETED.
+BACKEND: payment.service.ts creditPayee() resolves the payee's active dst-currency
+  account, pushes it through the payout rail (getPayoutRail), and stores
+  payoutMethod + payoutRailRef; called on both COMPLETED paths (straight-through
+  settle + release-on-approval). serialize() exposes the two fields.
+  payout-rail.interface.ts += pure destinationFromAccount(). Tests added.

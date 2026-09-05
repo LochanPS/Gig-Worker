@@ -12,6 +12,7 @@ import { raiseAlertsFromRules } from '../alerts/alert.service.js';
 import { markInvoicePaidByPayment } from '../invoices/invoice.service.js';
 import { getSettlement } from '../settlement/settlement.interface.js';
 import { hasActivePayoutAccount } from '../payouts/payout-account.service.js';
+import { getPayoutRail, destinationFromAccount } from '../payouts/payout-rail.interface.js';
 import { adjudicate, resolveAction } from '../agent/adjudicator.js';
 import { env } from '../../lib/env.js';
 import type { PaymentState, Role } from '@gigbridge/shared';
@@ -276,6 +277,34 @@ export async function confirmPayment(paymentId: string, actor: Actor, quoteId: s
   return getPaymentInternal(paymentId);
 }
 
+// The off-ramp "last mile": after on-chain release, deliver the settled value to the
+// payee as INR (or their dst currency) through the payout rail — a UPI push to their
+// VPA or a bank credit — and record how it landed (payoutMethod + railRef) for the
+// FIRC and the "credited to <vpa>" UI. Best-effort: the pre-funding gate already
+// guaranteed an active destination, so a missing account here is only defensive and
+// leaves the prior generic behaviour. Simulated by default; a real PA-CB rail swaps in
+// via setPayoutRail() with no orchestrator change.
+async function creditPayee(paymentId: string): Promise<void> {
+  const p = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (!p) return;
+  const acct = await prisma.payoutAccount.findFirst({
+    where: { userId: p.freelancerId, currency: p.dstCurrency, active: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!acct) return;
+  const result = await getPayoutRail().execute({
+    paymentId,
+    amountMinorInr: p.dstAmountMinor ?? 0,
+    destination: destinationFromAccount(acct),
+    purposeCode: p.purposeCode,
+    reference: paymentId,
+  });
+  await prisma.payment.update({
+    where: { id: paymentId },
+    data: { payoutMethod: acct.method ?? 'BANK', payoutRailRef: result.railRef },
+  });
+}
+
 // SETTLING -> COMPLETED -> credited. Shared by the straight-through confirm, the
 // payout retry, and the explicit release-on-approval path so all three produce
 // exactly the same timeline.
@@ -283,7 +312,9 @@ async function settleFundedPayment(paymentId: string, escrowId: string, actor: s
   await transition(paymentId, 'SETTLING', { actor: 'settlement', timelineKey: 'SETTLING' });
   const released = await getSettlement().release(escrowId);
   await transition(paymentId, 'COMPLETED', { actor, timelineKey: 'RELEASED', txHash: released.txHash });
-  // 'CREDITED' is the off-ramp confirmation on the same COMPLETED state.
+  // 'CREDITED' is the off-ramp confirmation on the same COMPLETED state: the rail
+  // pushes the INR to the payee's UPI id / bank and records how it landed.
+  await creditPayee(paymentId);
   await appendStep(paymentId, 'CREDITED', 'off-ramp');
   await markInvoicePaidByPayment(paymentId); // no-op unless this payment came from an invoice
 }
@@ -324,6 +355,7 @@ export async function releasePayment(paymentId: string, actor: Actor) {
     // Already settling — just finish it.
     const released = await getSettlement().release(p.escrowId ?? '0x');
     await transition(paymentId, 'COMPLETED', { actor: actorId, timelineKey: 'RELEASED', txHash: released.txHash });
+    await creditPayee(paymentId);
     await appendStep(paymentId, 'CREDITED', 'off-ramp');
     await markInvoicePaidByPayment(paymentId);
   } else {
@@ -464,6 +496,8 @@ function serialize(p: any) {
     complianceDecisionId: p.complianceDecisionId,
     txHashFund: p.txHashFund,
     txHashRelease: p.txHashRelease,
+    payoutMethod: p.payoutMethod ?? null,
+    payoutRailRef: p.payoutRailRef ?? null,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
     timeline: (p.timeline ?? []).map((t: any) => ({

@@ -59,6 +59,7 @@ export const payments: Payment[] = [
     state: 'COMPLETED', escrowId: '0xescrow01', escrowMode: 'INSTANT', complianceDecisionId: 'cd-1',
     txHashFund: '0xabc123def4567890000000000000000000000000000000000000000000000001',
     txHashRelease: '0xdef456abc7890123000000000000000000000000000000000000000000000002',
+    payoutMethod: 'UPI', payoutRailRef: 'UPI-9F2C71A0',
     createdAt: '2026-09-01T10:00:00Z', updatedAt: '2026-09-01T10:00:47Z', timeline: fullTimeline(),
   },
 ];

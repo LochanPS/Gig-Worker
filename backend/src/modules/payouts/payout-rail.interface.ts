@@ -52,6 +52,24 @@ export function buildUpiIntent(
   return `upi://pay?pa=${vpa}&pn=${pn}&am=${rupees}&cu=INR&tn=${tn}`;
 }
 
+// Map a stored payout account row to a rail destination. Pure + tested. An absent
+// or unknown method degrades to BANK (back-compat with pre-UPI accounts).
+export function destinationFromAccount(a: {
+  method: string | null;
+  accountName: string | null;
+  vpa: string | null;
+  accountNumberMasked: string | null;
+  bankIdentifier: string | null;
+}): PayoutDestination {
+  return {
+    method: a.method === 'UPI' ? 'UPI' : 'BANK',
+    accountName: a.accountName ?? null,
+    vpa: a.vpa ?? null,
+    accountNumberMasked: a.accountNumberMasked ?? null,
+    bankIdentifier: a.bankIdentifier ?? null,
+  };
+}
+
 const makeRailRef = (method: 'BANK' | 'UPI'): string =>
   (method === 'UPI' ? 'UPI-' : 'NEFT-') + randomBytes(6).toString('hex').toUpperCase();
 

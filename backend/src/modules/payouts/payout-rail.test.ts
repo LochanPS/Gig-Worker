@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildUpiIntent,
+  destinationFromAccount,
   simulatedPayoutRail,
   getPayoutRail,
   setPayoutRail,
@@ -55,6 +56,26 @@ describe('simulatedPayoutRail.execute', () => {
     expect(r.status).toBe('CREDITED');
     expect(r.railRef.startsWith('NEFT-')).toBe(true);
     expect(r.upiIntent).toBeNull();
+  });
+});
+
+describe('destinationFromAccount', () => {
+  it('maps a UPI account to a UPI destination carrying the VPA', () => {
+    const d = destinationFromAccount({
+      method: 'UPI', accountName: 'Asha Rao', vpa: 'asha@okhdfcbank', accountNumberMasked: null, bankIdentifier: null,
+    });
+    expect(d.method).toBe('UPI');
+    expect(d.vpa).toBe('asha@okhdfcbank');
+  });
+
+  it('maps a bank account to a BANK destination and defaults an unknown/absent method to BANK', () => {
+    const bank = destinationFromAccount({
+      method: 'BANK', accountName: 'Asha Rao', vpa: null, accountNumberMasked: '••••1234', bankIdentifier: 'HDFC0001234',
+    });
+    expect(bank.method).toBe('BANK');
+    expect(bank.accountNumberMasked).toBe('••••1234');
+    // legacy rows written before the method column existed
+    expect(destinationFromAccount({ method: null, accountName: 'X', vpa: null, accountNumberMasked: '••••9', bankIdentifier: 'IFSC' }).method).toBe('BANK');
   });
 });
 

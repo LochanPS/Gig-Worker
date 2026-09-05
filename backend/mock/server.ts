@@ -65,6 +65,7 @@ app.post(`${P}/payments`, async (req, reply) => {
     srcAmountMinor: b.srcAmountMinor, dstAmountMinor: null, feeAmountMinor: null, fxRateId: null,
     purposeCode: b.purposeCode, invoiceRef: b.invoiceRef ?? null, state: 'COMPLIANCE_CHECK',
     escrowId: null, escrowMode: b.escrowMode ?? 'INSTANT', complianceDecisionId: 'cd-1', txHashFund: null, txHashRelease: null,
+    payoutMethod: null, payoutRailRef: null,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     timeline: payments[0].timeline.slice(0, 2),
   };
