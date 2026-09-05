@@ -6,6 +6,12 @@ discussed in the parallel session is actually **present in the application**. It
 to be executed one phase at a time, on `main`, with a verify+push gate at the end of each
 phase. Any device can pick up at the next unchecked phase.*
 
+> **STATUS (2026-09-05): ✅ COMPLETE — phases 1–8 landed on `main`.** Commits: phases 1–2
+> `03b172a`, phase 3 `f0baa5e`, phase 4 `de2ac3d`, phase 5 `d58252d`, phase 6 `071032f`,
+> phase 7 `1879f87`, phase 8 (this docs reconcile). Verified: 127 backend tests + frontend
+> tsc + `vite build` green. The only remaining piece is the *real* licensed PA-CB / AD-bank
+> rail (roadmap #13) — the simulated rail already delivers the full end-to-end demo.
+
 **Definition of done:** a company pays a freelancer EUR/USD → the value settles on-chain in
 USDC → an **off-ramp delivers INR to the freelancer's UPI ID (or bank)** → the UI shows the
 credit + a scannable UPI QR → the FIRC reflects the off-ramp reference. All simulated
@@ -132,5 +138,5 @@ A phase is not "done" and is never pushed until its gate is green.
   session. Can follow Phase 8 if wanted.
 
 ## Progress log (update as phases land)
-- ☐ P0 baseline · ☐ P1 shared · ☐ P2 prisma · ☐ P3 rail · ☐ P4 orchestrator ·
-  ☐ P5 compliance · ☐ P6 FIRC · ☐ P7 frontend · ☐ P8 docs/demo
+- ☑ P0 baseline · ☑ P1 shared · ☑ P2 prisma · ☑ P3 rail · ☑ P4 orchestrator ·
+  ☑ P5 compliance · ☑ P6 FIRC · ☑ P7 frontend · ☑ P8 docs/demo — **ALL COMPLETE (2026-09-05)**

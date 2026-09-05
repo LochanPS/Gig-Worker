@@ -11,14 +11,16 @@ plainly whether the thing is **built**, **spec'd**, or **needs an external partn
 `SESSION_CAPTURE_2026-09-05.md` (session + UPI spec) → `EXECUTION_PLAN_UPI_LEG.md` (build plan).
 
 **Status legend**
-- ✅ **BUILT** — present on `main`, verified (117 backend tests · 34 forge tests · frontend tsc + `vite build`).
+- ✅ **BUILT** — present on `main`, verified (127 backend tests · 34 forge tests · frontend tsc + `vite build`).
 - 🧩 **SPEC'D** — designed in full in a doc, **not yet code** (buildable now, no external dependency).
 - 🤝 **NEEDS YOU** — blocked on an external partner, license, key, or asset; code seam may already exist.
 
-**UPI-leg progress (live):** Phases 1–2 of `EXECUTION_PLAN_UPI_LEG.md` landed on `main`
-in commit `03b172a` (2026-09-05, verified 117 backend tests) — the shared contract +
-Prisma data model + BANK/UPI service handling. Phases 3–8 (the `PayoutRail` port, the
-off-ramp execution that drives `CREDITED`, the PA-CB rule, FIRC wiring, frontend) remain.
+**UPI-leg progress:** ✅ **COMPLETE** — phases 1–8 of `EXECUTION_PLAN_UPI_LEG.md` are on
+`main` (2026-09-05, verified 127 backend tests + frontend build): shared contract + Prisma
+model (`03b172a`), `PayoutRail` port + simulated rail (`f0baa5e`), off-ramp drives
+`CREDITED` (`de2ac3d`), PA-CB limit rule (`d58252d`), FIRC off-ramp reference (`071032f`),
+frontend UPI method + credited-via-UPI card (`1879f87`). Only the *real* licensed PA-CB
+rail remains (roadmap #13).
 
 Every row names the **doc** that carries the detail: **RM** = `CORRIDOR_ROADMAP.md`,
 **V2** = `CORRIDOR_V2_IMPLEMENTED.md`, **SC** = `SESSION_CAPTURE_2026-09-05.md`,
@@ -61,24 +63,25 @@ Every row names the **doc** that carries the detail: **RM** = `CORRIDOR_ROADMAP.
 
 ---
 
-## B. The UPI leg / INR off-ramp last mile — the one genuine gap (SPEC'D)
+## B. The UPI leg / INR off-ramp last mile — ✅ BUILT (phases 1–8, simulated rail)
 
-*Full spec: **SC §3**. Ordered build plan: **EP** (8 phases). This is the USDC→INR fiat last
-mile — what turns `COMPLETED` from "settled in USDC" into "₹ in the freelancer's UPI app."
-The simulated path is fully buildable now, no license.*
+*Full spec: **SC §3**. Build plan + status: **EP** (8 phases, all complete). This is the
+USDC→INR fiat last mile — it turns `COMPLETED` from "settled in USDC" into "₹ credited to
+the freelancer's UPI id." The simulated rail is live on `main`; only the real licensed
+PA-CB rail (B11) remains.*
 
 | # | Piece | Status | Detail |
 |---|---|---|---|
-| B1 | **`PayoutRail` port** — `quoteOffRamp` / `execute` / `status`; `getPayoutRail`/`setPayoutRail`, mirrors the settlement port | 🧩 | SC §3.2, EP P3 |
-| B2 | **`simulatedPayoutRail`** — deterministic USDC→INR, returns `railRef` + `CREDITED` | 🧩 | SC §3.2, EP P3 |
-| B3 | **UPI QR / deep link** — `upi://pay?pa=<vpa>&am=<inr>&tn=<ref>&cu=INR`, scannable in the demo | 🧩 | SC §3.2, §4.3, EP P3 |
+| B1 | **`PayoutRail` port** — `execute` / `status`; `getPayoutRail`/`setPayoutRail`, mirrors the settlement port | ✅ (`f0baa5e`) | SC §3.2, EP P3 |
+| B2 | **`simulatedPayoutRail`** — deterministic USDC→INR, returns `railRef` + `CREDITED` | ✅ (`f0baa5e`) | SC §3.2, EP P3 |
+| B3 | **UPI deep link** — `upi://pay?pa=<vpa>&pn=<name>&am=<inr>&cu=INR&tn=<ref>` via `buildUpiIntent`; surfaced on the payment detail (tappable + copyable). *Pixel-QR image optional (no QR dep added).* | ✅ (`f0baa5e`+`1879f87`) | SC §3.2, §4.3 |
 | B4 | **`PayoutAccount.method` (BANK\|UPI) + `vpa`** — UPI as a payout method, back-compat default BANK; BANK/UPI service handling | ✅ (`03b172a`, EP P1–P2) | SC §3.3, EP P1–P2 |
-| B5 | **VPA validation** `handle@psp` shape ✅ (`VPA_REGEX`); penny-drop / VPA-validate + PSP-returned name | 🧩🤝 | SC §3.3, RM §4.14 |
-| B6 | **Drive `CREDITED` via the off-ramp** — no new `PaymentState`; off-ramp is the mechanism on `SETTLING→COMPLETED` | 🧩 (EP P4) | EP (locked decision 1), SC §3.4 |
+| B5 | **VPA validation** `handle@psp` shape ✅ (`VPA_REGEX`, front + back); penny-drop / VPA-validate + PSP-returned name | 🧩🤝 | SC §3.3, RM §4.14 |
+| B6 | **Drive `CREDITED` via the off-ramp** — no new `PaymentState`; `creditPayee` runs on `SETTLING→COMPLETED` and stores method + railRef | ✅ (`de2ac3d`) | EP (locked decision 1), SC §3.4 |
 | B7 | **`Payment.payoutRailRef` + `payoutMethod`** — how the INR was delivered, for FIRC + UI | ✅ (`03b172a`, EP P2) | EP P2 |
-| B8 | **PA-CB per-transaction limit** — a normal deterministic `Rule` (USD-2,000 class) → FLAG → adjudicator; `legalRef = RBI PA-CB` | 🧩 | SC §3.5, EP P5 |
-| B9 | **FIRC reflects the rail reference** — wire `railRef` + masked destination into the FIRC PDF | 🧩 | SC §3.5, EP P6 |
-| B10 | **Frontend — UPI method + QR + credited** — BANK/UPI toggle on Payout methods; QR + "on its way / credited to name@psp" on payment detail | 🧩 | EP P7 |
+| B8 | **PA-CB per-transaction limit** — a normal deterministic `Rule` (USD-2,000 class) → FLAG → adjudicator; `legalRef = RBI PA-CB` | ✅ (`d58252d`) | SC §3.5, EP P5 |
+| B9 | **FIRC reflects the rail reference** — `railRef` + masked destination (UPI VPA / bank) in the FIRC PDF | ✅ (`071032f`) | SC §3.5, EP P6 |
+| B10 | **Frontend — UPI method + credited card** — BANK/UPI toggle on Payout methods; "Credited via UPI" card (masked VPA, amount, upi:// deep link, copy, ref) + "Paid out" summary on payment detail | ✅ (`1879f87`) | EP P7 |
 | B11 | **`realPayoutRail`** — licensed PA-CB / AD-bank partner; `setPayoutRail()` at boot, orchestrator unchanged | 🤝 | SC §3.6, RM §4.13 |
 
 ---
@@ -162,25 +165,26 @@ D17 Legal/licensing (EU rail, India AD-bank + PA-CB) — the real critical path.
    (not on `track/frontend`). Build on `main` per RM §1.
 2. Read this file, then the four companion docs in the order in §E.
 3. **Do not rebuild** anything in Section A or C — it already exists on `main`.
-4. To build the demo's headline gap, execute the **UPI leg** via `EXECUTION_PLAN_UPI_LEG.md`.
-   **Phases 1–2 are already done** on `main` (commit `03b172a`, verified) — start at
-   **Phase 3** (the `PayoutRail` port). The simulated path needs no license, no external account.
+4. The **UPI leg is complete** on `main` (phases 1–8, `EXECUTION_PLAN_UPI_LEG.md`). The
+   simulated off-ramp delivers the full EUR→USDC→INR→UPI demo end to end. Only the *real*
+   licensed PA-CB rail (roadmap #13) remains, and it swaps in behind the same `PayoutRail`
+   port with no orchestrator change.
 5. Repo conventions: verify before push (tsc + vitest + vite build), `git fetch` + rebase,
    **never force-push**, log any `shared/*` change in `INTEGRATION_LOG.txt`, migrations
    committed but not applied.
 
 ---
 
-## 7. UPI-leg build status at time of writing (2026-09-05)
+## 7. UPI-leg build status (2026-09-05) — ✅ COMPLETE
 
-Phases 1–2 of `EXECUTION_PLAN_UPI_LEG.md` **landed on `main`** in commit `03b172a`, verified
-(117 backend tests, frontend build green): the shared contract (`PAYOUT_METHODS`, `PayoutAccount`
-DTO `method`+`vpa`, `addPayoutAccountSchema` superRefine, `VPA_REGEX`), the Prisma model
-(`PayoutAccount.method`/`vpa` + nullable bank columns, `Payment.payoutMethod`/`payoutRailRef`,
-migration `20260905060000_upi_leg` committed-not-applied), BANK/UPI service handling, and the
-`INTEGRATION_LOG.txt` entry. **Remaining: Phases 3–8** — the `PayoutRail` port + simulated impl
-(B1–B3), the off-ramp execution that drives `CREDITED` (B6), the PA-CB limit rule (B8), FIRC
-wiring (B9), and the frontend UPI method + QR (B10). Pick up at Phase 3.
+All 8 phases of `EXECUTION_PLAN_UPI_LEG.md` are on `main`, verified (127 backend tests +
+frontend tsc + `vite build` green): shared contract + Prisma model (`03b172a`), `PayoutRail`
+port + simulated rail + `buildUpiIntent` (`f0baa5e`), off-ramp drives `CREDITED` with method +
+railRef stored (`de2ac3d`), PA-CB per-transaction rule (`d58252d`), FIRC off-ramp reference +
+masked destination (`071032f`), frontend UPI payout method + credited-via-UPI card (`1879f87`),
+and this docs/demo reconcile (phase 8). **Remaining:** only the *real* licensed PA-CB / AD-bank
+rail (B11 / roadmap #13), which swaps in behind the same `PayoutRail` port with no orchestrator
+change.
 
 ---
 

@@ -5,7 +5,8 @@ DEMO SCRIPT — GIGBRIDGE (target: 6 minutes live + Q&A)
 SETUP (before judges arrive)
   - `docker compose up` on presenter laptop; `pnpm demo:reset`.
   - Three browser windows tiled: Company (Novatek GmbH), Freelancer (Priya),
-    Admin. All logged in. Backup demo video on desktop.
+    Admin. All logged in. Priya's payout method is UPI (priya@okhdfc) so the
+    INR off-ramp lands on a UPI id. Backup demo video on desktop.
 
 MINUTE 0-1 — THE PROBLEM (talk over Company overview screen)
   "Priya in Bengaluru finished a EUR 500 gig for Novatek in Berlin. Today,
@@ -27,8 +28,14 @@ MINUTE 1-3 — SCENARIO 1: HAPPY PATH
      auditors get both."
   4. Confirm -> rate-lock ring -> escrow funds ON-CHAIN. Point at the tx
      hash. Switch to Freelancer window: Priya's timeline is ticking LIVE.
-  5. Release -> COMPLETED -> Priya's balance updates, "You kept 99.25%"
-     banner. Total elapsed: ~50 seconds. Say the number out loud.
+  5. Release -> COMPLETED -> the USDC->INR off-ramp fires and Priya is
+     credited to her UPI id. POINT AT the "Credited via UPI" card on the
+     payment detail: the masked VPA (priya@okhdfc), the INR amount, the
+     off-ramp reference, and a scannable upi:// deep link. "This is the real
+     last mile — the rail India actually uses. Simulated here; a licensed
+     PA-CB partner swaps in with zero orchestrator change." The FIRC now
+     carries that off-ramp reference too. Priya's balance updates, "You kept
+     99.25%" banner. Total elapsed: ~50 seconds. Say the number out loud.
 
 MINUTE 3-4 — SCENARIO 2: THE AGENT SAYS NO
   6. Company window: attempt payout to "SanctionedCo" -> REJECTED instantly,

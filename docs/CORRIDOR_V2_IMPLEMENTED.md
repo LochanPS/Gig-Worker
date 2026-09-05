@@ -6,7 +6,7 @@ this document is the **detailed as-built** — the expansion of roadmap §3 into
 subsystem-by-subsystem reference so a new device can understand exactly what is
 implemented, where it lives, and how it behaves, without re-reading the code first.*
 
-**Scope of truth:** everything below is present on `main` and verified (109 backend
+**Scope of truth:** everything below is present on `main` and verified (127 backend
 tests, 34 forge tests, frontend typecheck + `vite build` green) unless a line explicitly
 says *proposed* or *not built*. Where this doc and the source ever disagree, **the source
 wins** — this is a map, not the territory.
@@ -71,10 +71,11 @@ export const setSettlement: (s: Settlement) => void;
   keccak256(paymentUuid)` (bytes32), stored on `Payment.escrowId`. `complianceHash =
   keccak256(decision)`, passed into `fund()` and anchored.
 
-**What settlement does NOT cover (the seam ends here):** the final **USDC → INR fiat
-cash-out** (the "UPI leg"). On-chain `release()` settles value in USDC to the platform/
-payee wallet; converting that to INR and pushing it to a freelancer's UPI/bank is the
-**off-ramp last mile** — see `docs/SESSION_CAPTURE_2026-09-05.md` for the full spec.
+**Beyond settlement — the INR off-ramp (the "UPI leg", ✅ built):** on-chain `release()`
+settles value in USDC; converting that to INR and pushing it to a freelancer's UPI/bank is
+the **off-ramp last mile**, handled by a separate **`PayoutRail` port** (§3.8) that runs on
+`SETTLING → COMPLETED`. Simulated by default (real PA-CB rail = roadmap #13). Full design:
+`docs/SESSION_CAPTURE_2026-09-05.md §3`; build record: `docs/EXECUTION_PLAN_UPI_LEG.md`.
 
 ---
 
@@ -136,12 +137,29 @@ paying company or an admin (`assertPayer`); reads require either party or an adm
 - FX **quote + rate-lock** with a countdown; free **reference** rate today (`fallback.json`
   + `rates.ts`). Executable/firm quotes from a liquidity partner are roadmap #12.
 
-### 3.8 Payout methods (`payouts/`)
+### 3.8 Payout methods + INR off-ramp (`payouts/`) — UPI leg ✅ built
 - A freelancer must have an **active payout account in the payment's destination currency**
   or the payment lands in `PAYOUT_FAILED`. `hasActivePayoutAccount(userId, currency)` is the
-  settlement gate.
-- `PayoutAccount`: `label, currency, accountName, accountNumberMasked (last-4), bankIdentifier,
-  active`. **Bank-account shaped only today — no UPI/VPA method yet** (see UPI-leg spec).
+  settlement gate (a UPI account counts as an active INR destination).
+- `PayoutAccount`: `label, currency, method (BANK|UPI), accountName, accountNumberMasked
+  (last-4), bankIdentifier, vpa, active`. **UPI is a first-class method** — a VPA
+  (`name@psp`, validated by `VPA_REGEX` front and back); BANK keeps account + IFSC/IBAN.
+- **`PayoutRail` port (`payout-rail.interface.ts`)** mirrors the settlement port:
+  `execute(instruction) → { railRef, status, upiIntent }`, `status(railRef)`,
+  `getPayoutRail`/`setPayoutRail`. **`simulatedPayoutRail`** (default) converts USDC→INR at
+  the reference rate, returns a `railRef` + `CREDITED`, and for UPI builds a scannable
+  `upi://pay?…` intent (`buildUpiIntent`). A **real PA-CB / AD-bank rail** implements the
+  same port and swaps in via `setPayoutRail()` (roadmap #13) — the orchestrator never learns
+  the vendor.
+- On `SETTLING → COMPLETED`, `payment.service.creditPayee()` resolves the payee's active
+  dst-currency account, calls the rail, stores `Payment.payoutMethod` + `payoutRailRef`, and
+  records the off-ramp detail (method, railRef, masked VPA, `upiIntent`) on the `CREDITED`
+  timeline step. **No new `PaymentState`** — the off-ramp is the mechanism behind `CREDITED`.
+- **Compliance:** a **PA-CB per-transaction cap** rule (RBI PA-CB, USD-2,000 class) screens
+  every INR-destination payment through the deterministic engine → FLAG → adjudicator.
+- **FIRC** carries the off-ramp reference + masked destination (see §3.9).
+- **Frontend:** BANK/UPI toggle on the Payout-methods page; a "Credited via UPI" card on the
+  payment detail (masked VPA, INR amount, `upi://` deep link + copy, rail ref).
 
 ### 3.9 Documents (PDFs)
 - Receipt / compliance / FIRC / credential PDFs, backend-generated. Payment documents render
@@ -187,7 +205,7 @@ hosting time. Frontend defaults `VITE_API_BASE` to the Railway backend when unse
 
 ## 6. Verification / how to prove it (no pnpm needed — local bins)
 - shared: `cd shared && ./node_modules/.bin/tsc`
-- backend: `cd backend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vitest run`  → 109 tests
+- backend: `cd backend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vitest run`  → 127 tests
 - frontend: `cd frontend && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/vite build`
 - contracts: `cd contracts && forge test`  → 34 tests
 
@@ -201,9 +219,10 @@ gitignored — rebuild `shared` after editing `shared/src`.
 | Layer | Covered | Gap |
 |---|---|---|
 | Backend | ~95% | external vendor integrations are seams, not live |
-| Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) | audit, real USDC, kill-switch, custody, public testnet, **INR off-ramp / UPI leg** |
+| Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) + **INR off-ramp / UPI leg (simulated rail)** | audit, real USDC, kill-switch, custody, public testnet, **real licensed PA-CB rail** |
 | Agent | explanation ✓ + payment adjudication ✓ + metrics ✓ | dispute triage, tuning, case management |
 | Frontend | ~98% | rich-charts variant decision (roadmap #8) |
 
-The **UPI leg / INR off-ramp** is the most demo-relevant gap and is specified in full in
-`docs/SESSION_CAPTURE_2026-09-05.md §3`.
+The **UPI leg / INR off-ramp** (once the most demo-relevant gap) is now **built** (simulated
+rail) — see §3.8 above, `docs/EXECUTION_PLAN_UPI_LEG.md` (phases 1–8), and the full design in
+`docs/SESSION_CAPTURE_2026-09-05.md §3`. Only the real licensed PA-CB rail remains (roadmap #13).

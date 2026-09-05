@@ -48,11 +48,14 @@ is already done; this table exists so a future device doesn't rebuild them by mi
 
 ---
 
-## 3. THE UPI LEG — full spec (PROPOSED / not built)
+## 3. THE UPI LEG — full spec (✅ BUILT, 2026-09-05, phases 1–8)
 > This is the USDC → INR **fiat off-ramp last mile**: how value that has settled on-chain
-> actually lands in an Indian freelancer's account via UPI. It is the single most
-> demo-relevant gap. Everything below is a forward design to be implemented; it is **not**
-> in the code yet.
+> actually lands in an Indian freelancer's account via UPI. It was the single most
+> demo-relevant gap and is now **implemented** on `main` (simulated rail; a real PA-CB
+> partner swaps in behind the same port). The forward design below is preserved as the
+> spec of record; see `EXECUTION_PLAN_UPI_LEG.md` for the phase-by-phase build and
+> `FEATURE_INDEX.md` §B for per-piece status. What remains is only the *real* licensed
+> rail (roadmap #13).
 
 ### 3.1 Where it fits in the existing flow
 Today the money movement ends here:

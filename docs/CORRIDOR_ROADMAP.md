@@ -1,6 +1,6 @@
 # Corridor — status & roadmap (single source of truth)
 
-*Updated 2026-09-04 (frontend gap closure). Product formerly "GigBridge". This is the current handoff
+*Updated 2026-09-05 (UPI leg / INR off-ramp built — see docs/EXECUTION_PLAN_UPI_LEG.md). Product formerly "GigBridge". This is the current handoff
 doc: what exists, how to work on it, and the ordered plan for what's next. Where
 it conflicts with older docs (`GO_LIVE_PLAN.md`, `ROADMAP_SIMPLE.txt`,
 `ROADMAP_3_PERSON_3_DAY.txt`), this wins. Build on other devices from this file.*
@@ -61,7 +61,7 @@ Reconciling either into the live app is a deliberate future decision, not automa
 
 ---
 
-## 3. What's BUILT (verified: 109 backend tests, typecheck + vite build green)
+## 3. What's BUILT (verified: 127 backend tests, typecheck + vite build green)
 Backend modules: `auth, verification, customers, directory, payments, payrun,
 schedules, invoices, payouts, disputes, compliance, agent, alerts, fx, settlement,
 documents, credentials, notifications, admin` — 60 routes.
@@ -81,6 +81,10 @@ documents, credentials, notifications, admin` — 60 routes.
   heuristic; env `AI_ADJUDICATION`. Only exceptions reach the human queue.
 - **Settlement**: on-chain seam (simulated default; real viem under
   `SETTLEMENT_MODE=real`), 4 contracts (34 forge tests), event listener, per-chain deploy.
+- **INR off-ramp (UPI leg)**: after on-chain release a `PayoutRail` port delivers INR to the
+  payee — **UPI (a VPA) or bank** — driving the `CREDITED` step; the simulated rail builds a
+  scannable `upi://` intent, stores `payoutMethod`+`payoutRailRef`, and the FIRC reflects the
+  reference. A PA-CB per-transaction cap rule screens INR payouts. Real licensed rail = #13.
 - **Unhappy paths**: `PAYOUT_FAILED` gate + retry, disputes → freeze → REVERSED/dismiss,
   refund, expired.
 - **Docs**: receipt / compliance / FIRC / credential PDFs (backend).
@@ -147,7 +151,9 @@ toggles company/freelancer/admin.
     government ID (Aadhaar Act / DPDP / GDPR). Wire behind the existing identity seam.
 11. 🤝 **Sanctions/PEP** — ComplyAdvantage / World-Check feed (replaces the mock list).
 12. 🤝 **Executable FX** — a liquidity partner's firm quote (today: free reference rate).
-13. 🤝 **Fiat rails** — EU cash-in (EMI/PI) + India AD-bank / RBI PA-CB cash-out.
+13. 🤝 **Fiat rails (real)** — the *simulated* INR off-ramp / UPI leg is **built** (§3, behind
+    the `PayoutRail` port); this item is the *real* licensed rail: EU cash-in (EMI/PI) + India
+    AD-bank / RBI PA-CB cash-out, swapped in via `setPayoutRail()` with no orchestrator change.
 14. 🤝 **Bank verification** — penny-drop via the payout rail.
 15. 🤝 **Real USDC + custody** — Circle / Fireblocks (drop MockUSDC on mainnet).
 
@@ -168,7 +174,7 @@ toggles company/freelancer/admin.
 | Layer | Covered | Gap |
 |---|---|---|
 | Backend | ~95% | external vendor integrations are seams, not live |
-| Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) | audit, real USDC, kill-switch, custody, public testnet |
+| Contracts & settlement | core 100% (4 contracts, 34 tests, sim+real, listener) + INR off-ramp / UPI leg (simulated rail) | audit, real USDC, kill-switch, custody, public testnet, real PA-CB rail |
 | Agent | explanation ✓ + payment adjudication ✓ + adjudication metrics ✓ | dispute triage, tuning, case management |
 | Frontend | ~98% | rich-charts variant (item 8) is the only open frontend decision |
 
