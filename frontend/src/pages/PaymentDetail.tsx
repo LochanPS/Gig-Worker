@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth.js';
 import { useWs } from '../lib/ws.js';
 import { money, Chip } from '../components/bits.js';
 import Timeline from '../components/Timeline.js';
+import { chainMeta } from '../lib/chain.js';
 
 export default function PaymentDetail({ backTo }: { backTo: string }) {
   const { id = '' } = useParams();
@@ -104,6 +105,7 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Escrow</span><span className="v mono">{p.escrowId ? p.escrowId.slice(0, 16) + '…' : '—'}</span>
             <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
             {p.payoutMethod && (<><span className="k">Paid out</span><span className="v">{p.payoutMethod === 'UPI' ? `UPI · ${credited?.vpaMasked ?? ''}` : 'Bank transfer'}</span></>)}
+            <span className="k">Network</span><span className="v">{chainMeta().name}</span>
           </div>
           <div className="docbtns">
             {docs.map((d) => (

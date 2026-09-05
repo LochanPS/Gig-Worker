@@ -44,6 +44,15 @@ const DEFAULT_DEPLOYER = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae78
 const DEFAULT_RPC = "http://127.0.0.1:8545";
 const DEFAULT_CHAIN_ID = 31337;
 
+// Public-chain metadata for nicer logs + explorer links (roadmap #7). Functionally
+// viem needs only id + rpc; name/explorer make the deploy output actionable.
+const CHAIN_META: Record<number, { name: string; explorer: string | null }> = {
+  31337: { name: "local-anvil", explorer: null },
+  11155111: { name: "ethereum-sepolia", explorer: "https://sepolia.etherscan.io" },
+  84532: { name: "base-sepolia", explorer: "https://sepolia.basescan.org" },
+  80002: { name: "polygon-amoy", explorer: "https://amoy.polygonscan.com" },
+};
+
 export interface DeployedAddresses {
   chainId: number;
   MockUSDC: Address;
@@ -69,11 +78,13 @@ function hexKey(k: string): `0x${string}` {
 }
 
 function localChain(chainId: number, rpcUrl: string) {
+  const meta = CHAIN_META[chainId];
   return defineChain({
     id: chainId,
-    name: "gigbridge-local",
+    name: meta?.name ?? `chain-${chainId}`,
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl] } },
+    ...(meta?.explorer ? { blockExplorers: { default: { name: "explorer", url: meta.explorer } } } : {}),
   });
 }
 
@@ -157,8 +168,18 @@ export async function ensureDeployed(opts: DeployOpts = {}): Promise<DeployedAdd
 if (process.argv[1] && process.argv[1].replace(/\\/g, "/").endsWith("deploy.ts")) {
   ensureDeployed()
     .then((a) => {
-      console.log("GigBridge contracts deployed:");
+      const meta = CHAIN_META[a.chainId];
+      console.log(`GigBridge contracts deployed to chain ${a.chainId}${meta ? ` (${meta.name})` : ""}:`);
       console.log(JSON.stringify(a, null, 2));
+      if (meta?.explorer) {
+        console.log("\nExplorer:");
+        for (const k of ["MockUSDC", "IdentityRegistry", "EscrowVault", "AuditAnchor"] as const) {
+          console.log(`  ${k}: ${meta.explorer}/address/${a[k]}`);
+        }
+      }
+      if (a.chainId !== DEFAULT_CHAIN_ID) {
+        console.log(`\nNext: commit shared/abis/addresses.${a.chainId}.json and build the frontend with VITE_CHAIN_ID=${a.chainId}.`);
+      }
     })
     .catch((e) => {
       console.error(e);

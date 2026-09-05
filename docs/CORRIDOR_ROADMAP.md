@@ -132,9 +132,11 @@ toggles company/freelancer/admin.
    `VITE_API_BASE` + verify once you have the backend URL.
 
 ### Real chain (still a demo until L2)
-7. 🤝/🤖 **Public testnet** — deploy the 4 contracts to Base Sepolia / Polygon Amoy,
-   commit `addresses.<chainId>.json`, surface explorer links. Code is chain-agnostic;
-   you provide RPC URL + a funded testnet key + faucet ETH.
+7. 🤝 **Public testnet** — WIRED (🤖 done): the deploy is chain-agnostic
+   (`cd contracts && RPC_URL=… CHAIN_ID=… DEPLOYER_PRIVATE_KEY=… npm run deploy` → writes the
+   committed `addresses.<chainId>.json` and prints explorer links), and the frontend surfaces
+   block-explorer links + the network name per `VITE_CHAIN_ID`. Runbook: `docs/DEPLOY_TESTNET.md`.
+   Remaining (🤝, yours): supply an RPC URL + a funded testnet key + faucet ETH and run it.
 
 ### Reconciliation decisions (choose the canonical stack)
 8. 🤝 **Rich frontend**: adopt `variants/frontend-rich/` (visx charts, 18 routes) as the

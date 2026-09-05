@@ -12,7 +12,8 @@
     "build:sol": "forge build",
     "test:sol": "forge test",
     "export-abis": "node script/export-abis.mjs",
-    "deploy:local": "tsx deploy.ts"
+    "deploy:local": "tsx deploy.ts",
+    "deploy": "tsx deploy.ts"
   },
   "dependencies": {
     "viem": "^2.21.0"

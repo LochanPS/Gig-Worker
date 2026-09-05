@@ -123,7 +123,7 @@ Full reconciliation table: **SC §2**.*
 | # | Item | Status | Detail |
 |---|---|---|---|
 | D3 | **Railway + Neon deploy** — live shareable URL; you provide Neon `DATABASE_URL`, accounts, `JWT_SECRET` | 🤝 | RM §4.6 |
-| D4 | **Public testnet** — deploy 4 contracts to Base Sepolia / Polygon Amoy, commit `addresses.<chainId>.json`, explorer links; you provide RPC + funded key | 🤝/🤖 | RM §4.7 |
+| D4 | **Public testnet** — WIRED: chain-agnostic deploy (`contracts` `npm run deploy` with RPC+CHAIN_ID+key → committed `addresses.<chainId>.json` + explorer output); frontend surfaces explorer links + network via `VITE_CHAIN_ID`. Awaiting your RPC + funded key. Runbook `DEPLOY_TESTNET.md` | 🤝 (run) | RM §4.7 |
 
 **Reconciliation decisions:**
 | # | Item | Status | Detail |

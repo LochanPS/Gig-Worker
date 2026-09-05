@@ -1,6 +1,7 @@
 // The 7-step payment lifecycle timeline (UI_SPEC §3.3). Steps present in the
 // payment's timeline[] are "done"; the rest render as pending.
 import type { TimelineStep } from '@gigbridge/shared';
+import { explorerTx } from '../lib/chain.js';
 
 const STEPS = [
   { key: 'CREATED', label: 'Payment created' },
@@ -29,7 +30,12 @@ export default function Timeline({ timeline }: { timeline: TimelineStep[] }) {
               {done ? (
                 <div className="tl-meta">
                   <span className="muted">{done.at ? new Date(done.at).toLocaleTimeString() : ''}{done.actor ? ` · ${done.actor}` : ''}</span>
-                  {done.txHash && <a className="mono txlink" href="#" onClick={(e) => e.preventDefault()} title={done.txHash}>{done.txHash.slice(0, 18)}…</a>}
+                  {done.txHash && (() => {
+                    const url = explorerTx(done.txHash);
+                    return url
+                      ? <a className="mono txlink" href={url} target="_blank" rel="noopener noreferrer" title={done.txHash}>{done.txHash.slice(0, 18)}… ↗</a>
+                      : <span className="mono txlink" title={done.txHash}>{done.txHash.slice(0, 18)}…</span>;
+                  })()}
                 </div>
               ) : <div className="tl-meta muted">Pending</div>}
             </div>
