@@ -3,10 +3,12 @@
 // confirm against a ticking rate lock. Everything here is the real backend.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { Currency, EscrowMode, FreelancerSummary, FxQuote, Payment, PurposeCode } from '@gigbridge/shared';
+import type { ComplianceDecision, Currency, EscrowMode, FreelancerSummary, FxQuote, Payment, PurposeCode } from '@gigbridge/shared';
 import { PURPOSE_CODES } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
+import RuleResults from '../../components/RuleResults.js';
+import TxLink from '../../components/TxLink.js';
 
 // FEMA purpose codes the engine accepts, with what each actually means — the
 // company has to pick one and "P0802" alone tells them nothing.
@@ -67,7 +69,7 @@ export default function NewPayout() {
   const [escrowMode, setEscrowMode] = useState<EscrowMode>('INSTANT');
 
   const [quote, setQuote] = useState<FxQuote | null>(null);
-  const [result, setResult] = useState<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } } | null>(null);
+  const [result, setResult] = useState<{ payment: Payment; quote: FxQuote; decision: ComplianceDecision } | null>(null);
   const [confirmed, setConfirmed] = useState<Payment | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -290,6 +292,10 @@ export default function NewPayout() {
           </div>
           <div className="agent">{result.decision.agentExplanation}</div>
 
+          {/* Rules decide the verdict; the text above only explains it. Showing every
+              rule's PASS/FAIL with its legal basis is what makes that checkable. */}
+          <RuleResults results={result.decision.ruleResults} />
+
           <div className="row" style={{ marginTop: 16, alignItems: 'center' }}>
             <button className="btn ghost" onClick={reset}>Start over</button>
             {result.decision.verdict === 'REJECT' ? (
@@ -328,8 +334,8 @@ export default function NewPayout() {
           <div className="kv">
             <span className="k">Payee receives</span><span className="v"><b>{money(confirmed.dstAmountMinor, confirmed.dstCurrency)}</b></span>
             <span className="k">Fee</span><span className="v">{money(confirmed.feeAmountMinor, confirmed.srcCurrency)}</span>
-            <span className="k">Fund tx</span><span className="v mono" style={{ wordBreak: 'break-all' }}>{confirmed.txHashFund ?? '—'}</span>
-            <span className="k">Release tx</span><span className="v mono" style={{ wordBreak: 'break-all' }}>{confirmed.txHashRelease ?? '—'}</span>
+            <span className="k">Fund tx</span><span className="v"><TxLink hash={confirmed.txHashFund} truncate={22} /></span>
+            <span className="k">Release tx</span><span className="v"><TxLink hash={confirmed.txHashRelease} truncate={22} /></span>
           </div>
           <div className="row" style={{ marginTop: 14 }}>
             <Link className="btn" to={`/company/payments/${confirmed.id}`}>View timeline</Link>

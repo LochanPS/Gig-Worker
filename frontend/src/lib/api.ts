@@ -4,8 +4,23 @@ import type {
   PayRun, PayoutSchedule, VerificationResult, CreatePayRunInput, CreateScheduleInput,
   PayoutAccount, Dispute, AddPayoutAccountInput, FreelancerSummary, EscrowMode,
   CustomerSummary, CreateCustomerInput, Notification, Credential, PaymentDocument,
-  AdjudicationSummary, Treasury,
+  AdjudicationSummary, Treasury, ComplianceDecision, RuleResult, Verdict,
 } from '@gigbridge/shared';
+
+// A flagged payment awaiting an operator, as /admin/queue serves it: the payment
+// summary plus the compliance decision that flagged it (rule-by-rule).
+export interface ReviewQueueItem {
+  paymentId: string;
+  company: string;
+  freelancer: string;
+  srcCurrency: string;
+  dstCurrency: string;
+  srcAmountMinor: number;
+  verdict: Verdict | undefined;
+  ruleResults: RuleResult[] | undefined;
+  agentExplanation: string | undefined;
+  createdAt: string;
+}
 
 // In dev, Vite proxies /api -> backend:4000 (relative base works).
 // In prod (frontend and backend on different origins), VITE_API_BASE sets the
@@ -98,7 +113,7 @@ export const api = {
   payments: () => req<Payment[]>('/payments'),
   payment: (id: string) => req<Payment>(`/payments/${id}`),
   createPayment: (body: { payeeId: string; srcCurrency: string; dstCurrency: string; srcAmountMinor: number; purposeCode: string; invoiceRef?: string; escrowMode?: EscrowMode }) =>
-    req<{ payment: Payment; quote: FxQuote; decision: { verdict: string; agentExplanation: string } }>('/payments', { method: 'POST', body: JSON.stringify(body) }),
+    req<{ payment: Payment; quote: FxQuote; decision: ComplianceDecision; payeeWallet: string | null }>('/payments', { method: 'POST', body: JSON.stringify(body) }),
   confirmPayment: (id: string, quoteId: string) =>
     req<Payment>(`/payments/${id}/confirm`, { method: 'POST', body: JSON.stringify({ quoteId }) }),
   retryPayout: (id: string, quoteId: string) =>
@@ -138,7 +153,7 @@ export const api = {
   paymentDocuments: (id: string) => req<PaymentDocument[]>(`/payments/${id}/documents`),
 
   // admin
-  queue: () => req<Array<Record<string, unknown>>>('/admin/queue'),
+  queue: () => req<ReviewQueueItem[]>('/admin/queue'),
   resolveFlag: (id: string, action: 'APPROVE' | 'REJECT', note: string) =>
     req<Payment>(`/admin/queue/${id}/resolve`, { method: 'POST', body: JSON.stringify({ action, note }) }),
   alerts: () => req<Alert[]>('/admin/alerts'),

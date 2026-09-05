@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react';
 import type { Alert, Dispute, AdminMetrics, CustomerSummary, AdjudicationSummary } from '@gigbridge/shared';
-import { api } from '../../lib/api.js';
+import { api, type ReviewQueueItem } from '../../lib/api.js';
 import { useWs } from '../../lib/ws.js';
 import { money, Chip, Stat } from '../../components/bits.js';
-
-interface QueueItem { paymentId: string; company: string; freelancer: string; verdict: string; agentExplanation: string; srcCurrency: string; srcAmountMinor: number; }
+import RuleResults from '../../components/RuleResults.js';
 
 export default function Monitor() {
-  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [queue, setQueue] = useState<ReviewQueueItem[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [customers, setCustomers] = useState<CustomerSummary[]>([]);
   const [adj, setAdj] = useState<AdjudicationSummary | null>(null);
   const load = () => {
-    api.queue().then((q) => setQueue(q as unknown as QueueItem[])).catch(() => {});
+    api.queue().then(setQueue).catch(() => {});
     api.alerts().then(setAlerts).catch(() => {});
     api.disputes().then(setDisputes).catch(() => {});
     api.metrics().then(setMetrics).catch(() => {});
@@ -33,6 +32,9 @@ export default function Monitor() {
   const resolveDispute = async (id: string, action: 'REFUND' | 'DISMISS') => { await api.resolveDispute(id, action, `${action} by operator`).catch(() => {}); load(); };
 
   const openDisputes = disputes.filter((d) => d.status === 'OPEN');
+  // Disputes the agent closed on its own. These used to vanish from this page
+  // entirely (it only listed OPEN), hiding the dispute-triage half of the agent.
+  const aiResolved = disputes.filter((d) => d.status !== 'OPEN' && (d.resolvedById ?? '').startsWith('ai:'));
   const verified = customers.filter((c) => c.verified).length;
 
   return (
@@ -57,6 +59,7 @@ export default function Monitor() {
         <div><div className="label">Handled without you</div><div className="val" style={{ fontSize: 24 }}>{adj ? `${adj.autoHandledPct}%` : '—'}</div></div>
         <div><div className="label">Escalated to you</div><div className="val" style={{ fontSize: 24 }}>{queue.length}</div></div>
         <div><div className="label">Open disputes</div><div className="val" style={{ fontSize: 24 }}>{openDisputes.length}</div></div>
+        <div><div className="label">Disputes auto-resolved</div><div className="val" style={{ fontSize: 24 }}>{aiResolved.length}</div></div>
         <div><div className="label">Open alerts</div><div className="val" style={{ fontSize: 24 }}>{alerts.length}</div></div>
         <div><div className="label">Verified customers</div><div className="val" style={{ fontSize: 24 }}>{verified}</div></div>
       </div>
@@ -67,9 +70,10 @@ export default function Monitor() {
           <div key={q.paymentId} className="card">
             <div className="row" style={{ justifyContent: 'space-between' }}>
               <div><b>{q.company}</b> → {q.freelancer} · <span className="mono">{q.srcCurrency} {(q.srcAmountMinor / 100).toFixed(2)}</span></div>
-              <Chip value={q.verdict} />
+              <Chip value={q.verdict ?? 'FLAG'} />
             </div>
             <div className="agent" style={{ marginTop: 10 }}>{q.agentExplanation}</div>
+            {q.ruleResults && <RuleResults results={q.ruleResults} title="Why it flagged" />}
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn" onClick={() => resolve(q.paymentId, 'APPROVE')}>Approve</button>
               <button className="btn ghost" onClick={() => resolve(q.paymentId, 'REJECT')}>Reject</button>
@@ -88,6 +92,9 @@ export default function Monitor() {
               <Chip value="DISPUTED" />
             </div>
             <div className="agent" style={{ marginTop: 10 }}>{d.reason}</div>
+            {/* The agent attaches its recommendation to an escalated dispute
+                (dispute.service). Showing it is the whole point of escalating. */}
+            <AiTriage note={d.resolutionNote} />
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn" onClick={() => resolveDispute(d.id, 'REFUND')}>Refund (reverse)</button>
               <button className="btn ghost" onClick={() => resolveDispute(d.id, 'DISMISS')}>Dismiss</button>
@@ -96,6 +103,31 @@ export default function Monitor() {
         ))}
         {openDisputes.length === 0 && <div className="card muted">No open disputes.</div>}
       </div>
+
+      {aiResolved.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Disputes resolved by the agent</h2>
+          <div className="card" style={{ padding: 0, overflowX: 'auto', marginBottom: 24 }}>
+            <table>
+              <thead><tr><th>Payment</th><th>Outcome</th><th>Confidence</th><th>Rationale</th><th>By</th></tr></thead>
+              <tbody>
+                {aiResolved.map((d) => {
+                  const t = parseTriage(d.resolutionNote);
+                  return (
+                    <tr key={d.id}>
+                      <td className="mono">{d.paymentId.slice(0, 8)}…</td>
+                      <td><Chip value={d.status === 'RESOLVED_REFUND' ? 'REVERSED' : 'APPROVE'} /></td>
+                      <td className="mono">{t.confidence ?? '—'}</td>
+                      <td className="muted" style={{ maxWidth: 420 }}>{t.rationale ?? d.resolutionNote ?? '—'}</td>
+                      <td className="muted mono" style={{ fontSize: 11 }}>{(d.resolvedById ?? '').replace(/^ai:/, '')}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <h2 style={{ fontSize: 15, margin: '0 0 10px' }}>Fraud alerts</h2>
       <div className="grid">
@@ -137,6 +169,32 @@ export default function Monitor() {
         </table>
       </div>
     </>
+  );
+}
+
+// The dispute adjudicator writes its verdict into resolutionNote as
+// "[ACTION · N% confidence] rationale", prefixed with "AI recommendation: " when it
+// escalated instead of acting. Pull those parts back out for display.
+function parseTriage(note: string | null): { action: string | null; confidence: string | null; rationale: string | null } {
+  if (!note) return { action: null, confidence: null, rationale: null };
+  const m = /^(?:AI recommendation:\s*)?\[([A-Z_]+)\s*·\s*(\d+)% confidence\]\s*([\s\S]*)$/.exec(note.trim());
+  if (!m) return { action: null, confidence: null, rationale: note };
+  return { action: m[1], confidence: `${m[2]}%`, rationale: m[3].trim() || null };
+}
+
+// An escalated dispute carries the agent's recommendation it declined to act on.
+function AiTriage({ note }: { note: string | null }) {
+  const t = parseTriage(note);
+  if (!t.action && !t.rationale) return null;
+  return (
+    <div className="aitriage">
+      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+        <span className="label" style={{ margin: 0 }}>AI recommendation</span>
+        {t.action && <Chip value={t.action === 'AUTO_REFUND' ? 'REVERSED' : t.action === 'AUTO_DISMISS' ? 'APPROVE' : 'FLAG'} />}
+        {t.confidence && <span className="muted mono" style={{ fontSize: 12 }}>{t.confidence} confidence</span>}
+      </div>
+      {t.rationale && <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{t.rationale}</div>}
+    </div>
   );
 }
 

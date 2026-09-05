@@ -9,6 +9,8 @@ import { useWs } from '../lib/ws.js';
 import { money, Chip } from '../components/bits.js';
 import Timeline from '../components/Timeline.js';
 import { chainMeta } from '../lib/chain.js';
+import QrCode from '../components/QrCode.js';
+import TxLink from '../components/TxLink.js';
 
 export default function PaymentDetail({ backTo }: { backTo: string }) {
   const { id = '' } = useParams();
@@ -106,6 +108,8 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             <span className="k">Escrow mode</span><span className="v">{p.escrowMode === 'HOLD' ? 'Held until work approved' : 'Straight through'}</span>
             {p.payoutMethod && (<><span className="k">Paid out</span><span className="v">{p.payoutMethod === 'UPI' ? `UPI · ${credited?.vpaMasked ?? ''}` : 'Bank transfer'}</span></>)}
             <span className="k">Network</span><span className="v">{chainMeta().name}</span>
+            <span className="k">Fund tx</span><span className="v"><TxLink hash={p.txHashFund} /></span>
+            <span className="k">Release tx</span><span className="v"><TxLink hash={p.txHashRelease} /></span>
           </div>
           <div className="docbtns">
             {docs.map((d) => (
@@ -134,12 +138,17 @@ export default function PaymentDetail({ backTo }: { backTo: string }) {
             {money(p.dstAmountMinor, p.dstCurrency)} pushed to <b>{credited.vpaMasked ?? 'the payee UPI id'}</b>.
             Scan or tap to open the request in any UPI app (GPay / PhonePe / Paytm).
           </p>
-          <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-            <a className="btn" href={credited.upiIntent}>Open in UPI app</a>
-            <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(credited.upiIntent!)}>Copy UPI link</button>
-            {credited.railRef && <span className="muted mono" style={{ fontSize: 12 }}>Ref {credited.railRef}</span>}
+          <div className="row" style={{ gap: 18, alignItems: 'flex-start' }}>
+            <QrCode value={credited.upiIntent} size={156} label="Scan with any UPI app" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+                <a className="btn" href={credited.upiIntent}>Open in UPI app</a>
+                <button className="btn ghost" onClick={() => navigator.clipboard?.writeText(credited.upiIntent!)}>Copy UPI link</button>
+                {credited.railRef && <span className="muted mono" style={{ fontSize: 12 }}>Ref {credited.railRef}</span>}
+              </div>
+              <div className="mono" style={{ fontSize: 11, marginTop: 10, wordBreak: 'break-all', opacity: 0.7 }}>{credited.upiIntent}</div>
+            </div>
           </div>
-          <div className="mono" style={{ fontSize: 11, marginTop: 10, wordBreak: 'break-all', opacity: 0.7 }}>{credited.upiIntent}</div>
         </div>
       )}
 

@@ -8,6 +8,7 @@ import type { Credential, VerificationResult } from '@gigbridge/shared';
 import { api, getToken } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.js';
 import { Chip } from '../../components/bits.js';
+import TxLink from '../../components/TxLink.js';
 
 // Mirrors the backend's credentialStatus(): revoked wins, then expiry.
 function statusOf(c: Credential): 'ACTIVE' | 'EXPIRED' | 'REVOKED' {
@@ -60,7 +61,7 @@ export default function Identity() {
                 <span className="k">Issued</span><span className="v">{day(cred.issuedAt)}</span>
                 <span className="k">Expires</span><span className="v">{day(cred.expiresAt)}</span>
                 <span className="k">On-chain anchor</span>
-                <span className="v mono" style={{ wordBreak: 'break-all' }}>{cred.anchorTxHash ?? '—'}</span>
+                <span className="v"><TxLink hash={cred.anchorTxHash} truncate={24} /></span>
               </div>
               <p className="muted" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 14 }}>
                 Only the hash is mirrored on-chain via the IdentityRegistry — no personal data

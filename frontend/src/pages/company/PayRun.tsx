@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { PayRun, PurposeCode, Currency } from '@gigbridge/shared';
 import { api } from '../../lib/api.js';
 import { money, Chip } from '../../components/bits.js';
+import TxLink from '../../components/TxLink.js';
 
 const PAYEES = [
   { id: '33333333-3333-3333-3333-333333333333', name: 'Priya Sharma (IN, verified)' },
@@ -121,7 +122,7 @@ export default function PayRunPage() {
                   <td>{nameOf(p.freelancerId)}</td>
                   <td style={{ textAlign: 'right' }} className="mono">{money(p.srcAmountMinor, p.srcCurrency)}</td>
                   <td style={{ textAlign: 'center' }}><Chip value={p.state} /></td>
-                  <td className="mono muted" style={{ fontSize: 11 }}>{p.txHashFund ? p.txHashFund.slice(0, 14) + '…' : '—'}</td>
+                  <td style={{ fontSize: 11 }}><TxLink hash={p.txHashFund} truncate={14} /></td>
                 </tr>
               ))}
             </tbody>

@@ -171,3 +171,42 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .ringwrap{position:relative;width:64px;height:64px;flex:none}
 .ring{width:64px;height:64px;display:block}
 .ringtext{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-variant-numeric:tabular-nums;font-family:'JetBrains Mono',ui-monospace,monospace}
+
+/* --- Per-rule compliance results (RuleResults) -------------------------------
+   The verdict is produced by code, so every rule is shown with its own
+   PASS/FAIL, jurisdiction and legal reference rather than summarised in prose. */
+.rules-panel{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2);overflow:hidden}
+.rules-head{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.rules-head .label{font-size:12.5px;color:var(--ink-soft);font-weight:600}
+.rulelist{list-style:none;margin:0;padding:0}
+.ruleitem{display:flex;gap:11px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ruleitem:last-child{border-bottom:0}
+.rulemark{flex:0 0 18px;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:700;margin-top:1px}
+.ruleitem.pass .rulemark{background:var(--approve-soft);color:var(--approve)}
+.ruleitem.block .rulemark{background:var(--reject-soft);color:var(--reject)}
+.ruleitem.flag .rulemark{background:var(--flag-soft);color:var(--flag)}
+.ruleitem.info .rulemark{background:var(--info-soft);color:var(--info)}
+.ruleitem.block{background:var(--reject-soft)}
+.ruleitem.flag{background:var(--flag-soft)}
+.rulebody{min-width:0;flex:1}
+.ruletop{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ruleid{font-size:12px;font-weight:700}
+.rulejur{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);font-weight:700}
+.rulesev{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px}
+.rulesev.block{background:var(--reject);color:#fff}
+.rulesev.flag{background:var(--flag);color:#fff}
+.rulemsg{font-size:13px;margin-top:2px}
+.ruleref{font-size:11.5px;margin-top:2px}
+
+/* --- Scannable QR (QrCode) --- */
+.qr{flex:0 0 auto}
+.qr-img{background:#fff;border:1px solid var(--line-strong);border-radius:12px;padding:8px;box-sizing:border-box}
+.qr-img svg{display:block;width:100%;height:100%}
+.qr-label{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:6px;font-weight:600}
+
+/* --- The agent's dispute recommendation on an escalated dispute --- */
+.aitriage{margin-top:10px;padding:10px 12px;border-radius:11px;
+  background:var(--info-soft);border:1px solid var(--line)}
+.aitriage .label{font-size:12px;color:var(--ink-soft);font-weight:700}
