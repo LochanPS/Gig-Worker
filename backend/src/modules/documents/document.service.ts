@@ -173,6 +173,27 @@ export function purposeDescription(code: string | null | undefined): string {
   return label ? `${code} — ${label}` : code;
 }
 
+// Mask a UPI VPA for a document: keep the first character of the handle and the
+// full PSP, star the rest (priya@okhdfcbank -> p****@okhdfcbank). Pure — tested.
+export function maskVpa(vpa: string | null | undefined): string | null {
+  if (!vpa) return null;
+  const at = vpa.indexOf('@');
+  if (at <= 0) return vpa;
+  const handle = vpa.slice(0, at);
+  const psp = vpa.slice(at + 1);
+  return `${handle.slice(0, 1)}${'*'.repeat(Math.max(2, handle.length - 1))}@${psp}`;
+}
+
+// One human-readable line describing how the INR reached the beneficiary: the
+// off-ramp delivery method + the masked destination. Pure — tested.
+export function payoutDeliveryLine(
+  method: string | null | undefined,
+  opts: { vpa?: string | null; accountMasked?: string | null } = {},
+): string {
+  if (method === 'UPI') return `UPI · ${maskVpa(opts.vpa) ?? '—'}`;
+  return `Bank transfer${opts.accountMasked ? ` · ${opts.accountMasked}` : ''}`;
+}
+
 // A certificate may only attest to money that actually arrived. Pure — throws with
 // the HTTP statusCode the global error handler maps; unit-tested without a DB.
 export function assertFircEligible(state: PaymentState, dstCurrency: string): void {
@@ -201,6 +222,14 @@ export async function fircHtml(paymentId: string): Promise<string> {
   });
 
   assertFircEligible(p.state, p.dstCurrency);
+
+  // The off-ramp account the INR actually landed in (UPI VPA or bank), for the
+  // delivery line below. Best-effort: an older completed payment may predate the
+  // payout-rail leg and simply show the stored method + reference.
+  const acct = await prisma.payoutAccount.findFirst({
+    where: { userId: p.freelancerId, currency: p.dstCurrency, active: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
   const issuedAt = new Date();
   const certNo = fircCertNumber(p.id, issuedAt);
@@ -254,6 +283,12 @@ export async function fircHtml(paymentId: string): Promise<string> {
     <tr><td class="k">Escrow ID</td><td class="v mono">${esc(p.escrowId ?? '—')}</td></tr>
     <tr><td class="k">Fund transaction</td><td class="v mono">${esc(p.txHashFund ?? '—')}</td></tr>
     <tr><td class="k">Release transaction</td><td class="v mono">${esc(p.txHashRelease ?? '—')}</td></tr>
+  </table>
+
+  <h2>Payout to beneficiary (off-ramp)</h2>
+  <table>
+    <tr><td class="k">Delivery method</td><td class="v">${esc(payoutDeliveryLine(p.payoutMethod, { vpa: acct?.vpa, accountMasked: acct?.accountNumberMasked }))}</td></tr>
+    <tr><td class="k">Off-ramp reference (UTR)</td><td class="v mono">${esc(p.payoutRailRef ?? '—')}</td></tr>
   </table>
 
   <div class="seal">

@@ -1,6 +1,6 @@
 // Tests the money/escape helpers used by the document generator (pure, no DB).
 import { describe, it, expect } from 'vitest';
-import { fircCertNumber, purposeDescription, paymentDocuments, assertFircEligible } from './document.service.js';
+import { fircCertNumber, purposeDescription, paymentDocuments, assertFircEligible, maskVpa, payoutDeliveryLine } from './document.service.js';
 
 // Re-declare the same helpers to test their behaviour (kept in sync with service).
 const money = (minor: number | null | undefined, ccy: string) =>
@@ -36,6 +36,21 @@ describe('FIRC helpers', () => {
     expect(purposeDescription('P9999')).toBe('P9999'); // unknown code passes through
     expect(purposeDescription(null)).toBe('Not specified');
     expect(purposeDescription(undefined)).toBe('Not specified');
+  });
+});
+
+describe('off-ramp delivery line (FIRC)', () => {
+  it('masks a UPI VPA, keeping the first char and the PSP', () => {
+    expect(maskVpa('priya@okhdfcbank')).toBe('p****@okhdfcbank');
+    expect(maskVpa('ab@ybl')).toBe('a**@ybl');
+    expect(maskVpa(null)).toBeNull();
+    expect(maskVpa('nohandle')).toBe('nohandle'); // no '@' passes through
+  });
+
+  it('describes the off-ramp delivery method', () => {
+    expect(payoutDeliveryLine('UPI', { vpa: 'priya@okhdfcbank' })).toBe('UPI · p****@okhdfcbank');
+    expect(payoutDeliveryLine('BANK', { accountMasked: '****1234' })).toBe('Bank transfer · ****1234');
+    expect(payoutDeliveryLine(null, {})).toBe('Bank transfer'); // pre-UPI default
   });
 });
 
